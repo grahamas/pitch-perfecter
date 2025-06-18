@@ -1,10 +1,11 @@
 use eframe::egui;
 use crate::{RecordingControl, PlaybackControl};
-use std::sync::mpsc::{self, Sender, Receiver};
+use std::sync::mpsc;
 use rfd::FileDialog;
 use std::env;
 use egui_plot::{Plot, Line, PlotPoints};
-use hound::WavReader;
+use crate::audio_helpers;
+use std::sync::{Arc, Mutex};
 
 /// Main application state for Pitch Perfecter
 pub struct AudioApp {
@@ -13,38 +14,26 @@ pub struct AudioApp {
     pub playing: bool,
     pub recording_control: Option<RecordingControl>,
     pub playback_control: Option<PlaybackControl>,
-    pub playback_done_rx: Option<Receiver<()>>,
+    pub playback_done_rx: Option<mpsc::Receiver<()>>,
+    /// In-memory buffer for live waveform display while recording
+    pub recorded_samples: Arc<Mutex<Vec<f32>>>,
 }
 
 impl Default for AudioApp {
     fn default() -> Self {
         Self {
-            file_path: "audio/recorded_audio.wav".to_owned(),
+            file_path: String::new(), // No pre-selected file
             recording: false,
             playing: false,
             recording_control: None,
             playback_control: None,
             playback_done_rx: None,
+            recorded_samples: Arc::new(Mutex::new(Vec::new())),
         }
     }
 }
 
 impl AudioApp {
-    /// Load audio samples from the current file path (WAV file)
-    fn load_audio_samples(&self) -> Option<Vec<f32>> {
-        if let Ok(mut reader) = WavReader::open(&self.file_path) {
-            let spec = reader.spec();
-            let samples: Vec<f32> = if spec.sample_format == hound::SampleFormat::Float {
-                reader.samples::<f32>().filter_map(Result::ok).collect()
-            } else {
-                reader.samples::<i16>().filter_map(Result::ok).map(|s| s as f32 / i16::MAX as f32).collect()
-            };
-            Some(samples)
-        } else {
-            None
-        }
-    }
-
     /// File selection UI: open/save dialogs and file path entry
     fn file_selector_ui(&mut self, ui: &mut egui::Ui) {
         let audio_dir = env::current_dir()
@@ -78,11 +67,24 @@ impl AudioApp {
             // Record button
             if ui.add_enabled(!self.recording, egui::Button::new(egui::RichText::new("⏺ Record").size(18.0))).clicked() {
                 self.recording = true;
+                // If no file is selected, create a unique file in audio/
+                if self.file_path.trim().is_empty() {
+                    let audio_dir = std::env::current_dir()
+                        .map(|p| p.join("audio"))
+                        .unwrap_or_else(|_| std::path::PathBuf::from("audio"));
+                    let _ = std::fs::create_dir_all(&audio_dir);
+                    let timestamp = chrono::Local::now().format("%Y%m%d_%H%M%S");
+                    let unique_name = format!("recording_{}.wav", timestamp);
+                    let unique_path = audio_dir.join(unique_name);
+                    self.file_path = unique_path.to_string_lossy().to_string();
+                }
                 let path = self.file_path.clone();
                 let control = RecordingControl::new();
                 self.recording_control = Some(control.clone());
+                self.recorded_samples.lock().unwrap().clear();
+                let live_buffer = self.recorded_samples.clone();
                 std::thread::spawn(move || {
-                    crate::audio::record_audio_with_control(&path, control);
+                    crate::audio::record_audio_with_control_and_buffer(&path, control, live_buffer);
                 });
             }
             // Stop Recording button
@@ -136,18 +138,38 @@ impl AudioApp {
         ).size(16.0).italics());
     }
 
-    /// Waveform plot UI: shows the waveform of the loaded audio file
+    /// Waveform plot UI: shows the waveform of the loaded audio file or live recording
     fn waveform_ui(&self, ui: &mut egui::Ui) {
-        if let Some(samples) = self.load_audio_samples() {
-            if !samples.is_empty() {
-                // Convert samples to plot points (x = sample index, y = amplitude)
-                let points: PlotPoints = samples.iter().enumerate().map(|(i, &s)| [i as f64, s as f64]).collect();
-                let line = Line::new(points);
-                Plot::new("waveform").height(150.0).show(ui, |plot_ui| {
-                    plot_ui.line(line);
-                });
-            }
+        let sample_rate = 44100.0;
+        let five_sec_samples = (sample_rate * 5.0) as usize;
+        let samples = if self.recording {
+            let guard = self.recorded_samples.lock().unwrap();
+            if guard.is_empty() { None } else { Some(guard.clone()) }
+        } else if self.file_path.trim().is_empty() {
+            None
+        } else {
+            audio_helpers::load_audio_samples(&self.file_path)
+        };
+        let mut padded_samples = vec![0.0; five_sec_samples];
+        if let Some(s) = samples {
+            let len = s.len().min(five_sec_samples);
+            padded_samples[(five_sec_samples - len)..].copy_from_slice(&s[s.len().saturating_sub(five_sec_samples)..]);
         }
+        // X axis: just use sample index (no label, no custom range, no ticks)
+        let points: PlotPoints = padded_samples.iter().enumerate().map(|(i, &s)| [i as f64, s as f64]).collect();
+        let line = Line::new(points);
+        // Y axis: always include -1 and 1, but expand if needed
+        let min_y = padded_samples.iter().cloned().fold(0.0/0.0, f32::min).min(-1.0);
+        let max_y = padded_samples.iter().cloned().fold(0.0/0.0, f32::max).max(1.0);
+        Plot::new("waveform")
+            .height(150.0)
+            .include_y(min_y as f64)
+            .include_y(max_y as f64)
+            .show_axes(false)
+            .show_grid(false)
+            .show(ui, |plot_ui| {
+                plot_ui.line(line);
+            });
     }
 }
 
@@ -161,6 +183,10 @@ impl eframe::App for AudioApp {
                 self.playback_control = None;
                 self.playback_done_rx = None;
             }
+        }
+        // Force GUI to repaint frequently while recording for smooth waveform updates
+        if self.recording {
+            ctx.request_repaint();
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {

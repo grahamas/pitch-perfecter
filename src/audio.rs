@@ -1,53 +1,8 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter, WavReader, SampleFormat};
-use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
 use crate::{RecordingControl, PlaybackControl};
-
-pub fn record_audio_with_control(wav_path: &str, control: RecordingControl) {
-    let host = cpal::default_host();
-    let device = host.default_input_device().expect("Failed to find input device");
-    let supported_config = device.default_input_config().expect("Failed to get default input config");
-    let stream_config: cpal::StreamConfig = supported_config.clone().into();
-
-    println!("Recording from: {}", device.name().unwrap());
-    let (tx, rx) = std::sync::mpsc::channel();
-    let tx_callback = tx.clone();
-
-    let stream = device.build_input_stream(
-        &stream_config,
-        move |data: &[f32], _| { let _ = tx_callback.send(data.to_vec()); },
-        move |err| eprintln!("Stream error: {:?}", err),
-        None,
-    ).expect("Failed to build input stream");
-    stream.play().expect("Failed to start stream");
-
-    println!("Recording... Press Stop to finish.");
-    while !control.should_stop() {
-        std::thread::sleep(std::time::Duration::from_millis(100));
-    }
-
-    drop(stream);
-    drop(tx);
-
-    let mut samples = Vec::new();
-    while let Ok(data) = rx.recv() {
-        samples.extend(data);
-    }
-
-    let spec = WavSpec {
-        channels: supported_config.channels(),
-        sample_rate: supported_config.sample_rate().0,
-        bits_per_sample: 32,
-        sample_format: SampleFormat::Float,
-    };
-    let mut writer = WavWriter::create(wav_path, spec).expect("WAV writer");
-    for &s in &samples {
-        writer.write_sample(s).unwrap();
-    }
-    writer.finalize().unwrap();
-    println!("Saved to {wav_path}");
-}
 
 pub fn play_audio_with_control_and_notify(path: &str, control: PlaybackControl, done_tx: std::sync::mpsc::Sender<()>) {
     let mut reader = WavReader::open(path).expect("WAV open");
@@ -91,4 +46,65 @@ pub fn play_audio_with_control_and_notify(path: &str, control: PlaybackControl, 
     }
     drop(stream);
     let _ = done_tx.send(());
+}
+
+pub fn record_audio_with_control_and_buffer(wav_path: &str, control: RecordingControl, live_buffer: Arc<Mutex<Vec<f32>>>) {
+    let host = cpal::default_host();
+    let device = host.default_input_device().expect("Failed to find input device");
+    let supported_config = device.default_input_config().expect("Failed to get default input config");
+    let stream_config: cpal::StreamConfig = supported_config.clone().into();
+
+    println!("Recording from: {}", device.name().unwrap());
+    let (tx, rx) = std::sync::mpsc::channel();
+    let tx_callback = tx.clone();
+
+    let stream = device.build_input_stream(
+        &stream_config,
+        {
+            let live_buffer_clone = live_buffer.clone();
+            let supported_sample_rate = supported_config.sample_rate().0;
+            move |data: &[f32], _| {
+                let _ = tx_callback.send(data.to_vec());
+                // Push to live buffer for GUI
+                if let Ok(mut buf) = live_buffer_clone.lock() {
+                    buf.extend_from_slice(data);
+                    // Limit buffer size for performance (e.g., last 10 seconds)
+                    let max_samples = (supported_sample_rate * 10) as usize;
+                    if buf.len() > max_samples {
+                        let excess = buf.len() - max_samples;
+                        buf.drain(0..excess);
+                    }
+                }
+            }
+        },
+        move |err| eprintln!("Stream error: {:?}", err),
+        None,
+    ).expect("Failed to build input stream");
+    stream.play().expect("Failed to start stream");
+
+    println!("Recording... Press Stop to finish.");
+    while !control.should_stop() {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    drop(stream);
+    drop(tx);
+
+    let mut samples = Vec::new();
+    while let Ok(data) = rx.recv() {
+        samples.extend(data);
+    }
+
+    let spec = WavSpec {
+        channels: supported_config.channels(),
+        sample_rate: supported_config.sample_rate().0,
+        bits_per_sample: 32,
+        sample_format: SampleFormat::Float,
+    };
+    let mut writer = WavWriter::create(wav_path, spec).expect("WAV writer");
+    for &s in &samples {
+        writer.write_sample(s).unwrap();
+    }
+    writer.finalize().unwrap();
+    println!("Saved to {wav_path}");
 }

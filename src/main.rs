@@ -1,4 +1,5 @@
 mod audio;
+mod audio_helpers;
 pub use crate::recording_control::RecordingControl;
 pub use crate::playback_control::PlaybackControl;
 mod gui;
