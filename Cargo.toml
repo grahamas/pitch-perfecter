@@ -13,3 +13,8 @@ hound = "3.5.1"
 rfd = "0.15.3"
 chrono = "0.4"
 rustfft = "6.1"
+plotters = "0.3.7"
+pyin = "1.2.0"
+ndarray = "0.16.1"
+pitch-detection = "0.3.0"
+sound_synth = { path = "../sound_synth" }

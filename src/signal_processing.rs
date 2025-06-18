@@ -129,3 +129,5 @@ mod tests {
         assert_eq!(peaks, vec![1, 2, 0]);
     }
 }
+
+// pub use pitch_perfecter::pitch::yin::*;

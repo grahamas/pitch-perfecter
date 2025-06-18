@@ -27,19 +27,40 @@ pub struct AudioApp {
 
 impl Default for AudioApp {
     fn default() -> Self {
-        Self {
-            file_path: String::new(), // No pre-selected file
+        // Try to pick a default recording from the audio directory
+        let audio_dir = std::env::current_dir()
+            .map(|p| p.join("audio"))
+            .unwrap_or_else(|_| std::path::PathBuf::from("audio"));
+        let mut default_file = String::new();
+        if let Ok(entries) = std::fs::read_dir(&audio_dir) {
+            // Pick the first .wav file found (static random choice)
+            for entry in entries.flatten() {
+                let path = entry.path();
+                if let Some(ext) = path.extension() {
+                    if ext == "wav" {
+                        default_file = path.to_string_lossy().to_string();
+                        break;
+                    }
+                }
+            }
+        }
+        let mut app = Self {
+            file_path: default_file,
             recording: false,
             playing: false,
             recording_control: None,
             playback_control: None,
             playback_done_rx: None,
             recorded_samples: Arc::new(Mutex::new(Vec::new())),
-            playback_start: None, // Initialize playback_start
+            playback_start: None,
             cached_sample_rate: None,
             cached_total_samples: None,
             cached_duration_sec: None,
+        };
+        if !app.file_path.is_empty() {
+            app.update_audio_metadata();
         }
+        app
     }
 }
 
