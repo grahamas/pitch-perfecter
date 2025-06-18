@@ -18,6 +18,11 @@ pub struct AudioApp {
     pub playback_done_rx: Option<mpsc::Receiver<()>>,
     /// In-memory buffer for live waveform display while recording
     pub recorded_samples: Arc<Mutex<Vec<f32>>>,
+    pub playback_start: Option<std::time::Instant>, // Track playback start time
+    // Cached audio metadata
+    pub cached_sample_rate: Option<u32>,
+    pub cached_total_samples: Option<u32>,
+    pub cached_duration_sec: Option<f32>,
 }
 
 impl Default for AudioApp {
@@ -30,6 +35,10 @@ impl Default for AudioApp {
             playback_control: None,
             playback_done_rx: None,
             recorded_samples: Arc::new(Mutex::new(Vec::new())),
+            playback_start: None, // Initialize playback_start
+            cached_sample_rate: None,
+            cached_total_samples: None,
+            cached_duration_sec: None,
         }
     }
 }
@@ -48,6 +57,7 @@ impl AudioApp {
                 if let Some(path) = FileDialog::new().set_directory(&audio_dir).pick_file() {
                     if let Some(path_str) = path.to_str() {
                         self.file_path = path_str.to_owned();
+                        self.update_audio_metadata(); // Update cache on file select
                     }
                 }
             }
@@ -56,6 +66,7 @@ impl AudioApp {
                 if let Some(path) = FileDialog::new().set_directory(&audio_dir).set_file_name(&self.file_path).save_file() {
                     if let Some(path_str) = path.to_str() {
                         self.file_path = path_str.to_owned();
+                        self.update_audio_metadata(); // Update cache on file save
                     }
                 }
             }
@@ -105,6 +116,7 @@ impl AudioApp {
             // Play button
             if ui.add_enabled(!self.playing, egui::Button::new(egui::RichText::new("▶ Play").size(18.0))).clicked() {
                 self.playing = true;
+                self.playback_start = Some(std::time::Instant::now()); // Set playback_start only once here
                 let path = self.file_path.clone();
                 let control = PlaybackControl::new();
                 self.playback_control = Some(control.clone());
@@ -122,6 +134,7 @@ impl AudioApp {
                 self.playing = false;
                 self.playback_control = None;
                 self.playback_done_rx = None;
+                self.playback_start = None; // Reset playback_start on stop
             }
         });
     }
@@ -173,8 +186,8 @@ impl AudioApp {
             });
     }
 
-    /// Spectrogram plot UI: shows the log-magnitude spectrogram of the loaded audio file with a viridis-like color map
-    fn spectrogram_ui(&self, ui: &mut egui::Ui) {
+    /// Spectrogram plot UI: shows the log-magnitude spectrogram of the loaded audio file with a viridis-like color map and moving peak overlay
+    fn spectrogram_ui(&mut self, ui: &mut egui::Ui) {
         // Only show for loaded files, not live recording
         if self.recording || self.file_path.trim().is_empty() {
             return;
@@ -184,7 +197,6 @@ impl AudioApp {
             let step_size = 256;
             let window_sec = window_size as f32 / sample_rate as f32;
             let step_sec = step_size as f32 / sample_rate as f32;
-            println!("Spectrogram window: {:.3} s, step: {:.3} s", window_sec, step_sec);
             let mut spectrogram = signal_processing::compute_log_spectrogram(&samples, window_size, step_size);
             if spectrogram.is_empty() { return; }
             // Drop the upper (unreal) half of the spectrum (keep only positive frequencies)
@@ -218,7 +230,7 @@ impl AudioApp {
                     pixels.extend_from_slice(&[r, g, b, 255]);
                 }
             }
-            // Draw the spectrogram image only (no moving peak overlay)
+            // Draw the spectrogram image
             let image = egui::ColorImage::from_rgba_unmultiplied([
                 n_time, n_freq
             ], &pixels);
@@ -230,8 +242,69 @@ impl AudioApp {
             let time_label = format!("Time (s), step {:.3}s", step_sec);
             let freq_label = format!("Frequency (Hz), window {:.3}s", window_sec);
             ui.label(&time_label);
-            ui.image((texture.id(), egui::vec2(600.0, 400.0)));
+            // Overlay: moving peak trace (yellow line)
+            use egui::epaint::{Color32, Shape, Stroke};
+            let peak_indices = signal_processing::detect_moving_peak(&spectrogram);
+            let mut peak_points = Vec::with_capacity(n_time);
+            for (t, &freq_bin) in peak_indices.iter().enumerate() {
+                let x = t as f32 / n_time as f32; // normalized time
+                let y = 1.0 - (freq_bin as f32 / n_freq as f32); // normalized freq (flip y for image coordinates)
+                peak_points.push(egui::pos2(x, y));
+            }
+            // Draw image and overlay in a custom painter
+            let (response, painter) = ui.allocate_painter(egui::vec2(600.0, 400.0), egui::Sense::hover());
+            let rect = response.rect;
+            // Draw the spectrogram image
+            painter.image(
+                texture.id(),
+                rect,
+                egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                Color32::WHITE,
+            );
+            // Draw the moving peak overlay as unconnected yellow points (circles)
+            if peak_points.len() > 1 {
+                for p in &peak_points {
+                    // Map normalized coordinates to painter rect
+                    let mapped = egui::pos2(rect.left() + p.x * rect.width(), rect.top() + (1.0 - p.y) * rect.height());
+                    painter.add(Shape::circle_filled(mapped, 3.0, Color32::YELLOW));
+                }
+            }
+            // Draw a vertical red line to indicate playback time
+            if self.playing {
+                // Align red line with spectrogram time bins (not raw samples), using cached metadata
+                if let (Some(sample_rate), Some(duration_sec)) = (self.cached_sample_rate, self.cached_duration_sec) {
+                    let mut elapsed_sec = 0.0;
+                    if let Some(start) = self.playback_start {
+                        elapsed_sec = std::time::Instant::now().duration_since(start).as_secs_f32();
+                    }
+                    // Clamp to total duration
+                    let clamped_time = elapsed_sec.min(duration_sec);
+                    // Map elapsed time to normalized spectrogram X (time bin)
+                    let progress = (clamped_time / duration_sec).min(1.0).max(0.0);
+                    let x = rect.left() + progress * rect.width();
+                    painter.add(Shape::line_segment([
+                        egui::pos2(x, rect.top()),
+                        egui::pos2(x, rect.bottom())
+                    ], Stroke::new(2.0, Color32::RED)));
+                }
+            }
             ui.label(&freq_label);
+        }
+    }
+
+    /// Update cached audio metadata (sample rate, total samples, duration)
+    fn update_audio_metadata(&mut self) {
+        if let Ok(reader) = hound::WavReader::open(&self.file_path) {
+            let spec = reader.spec();
+            let total_samples = reader.duration();
+            let duration_sec = total_samples as f32 / spec.sample_rate as f32;
+            self.cached_sample_rate = Some(spec.sample_rate);
+            self.cached_total_samples = Some(total_samples as u32);
+            self.cached_duration_sec = Some(duration_sec);
+        } else {
+            self.cached_sample_rate = None;
+            self.cached_total_samples = None;
+            self.cached_duration_sec = None;
         }
     }
 }
@@ -247,9 +320,12 @@ impl eframe::App for AudioApp {
                 self.playback_done_rx = None;
             }
         }
-        // Force GUI to repaint frequently while recording for smooth waveform updates
+        // Force GUI to repaint frequently while recording or playing for smooth updates
         if self.recording {
             ctx.request_repaint();
+        }
+        if self.playing {
+            ctx.request_repaint_after(std::time::Duration::from_millis(16)); // ~60 FPS
         }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.vertical_centered(|ui| {

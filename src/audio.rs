@@ -19,7 +19,8 @@ pub fn play_audio_with_control_and_notify(path: &str, control: PlaybackControl, 
         sample_rate: cpal::SampleRate(spec.sample_rate),
         buffer_size: cpal::BufferSize::Default,
     };
-    let idx = std::sync::Arc::new(std::sync::atomic::AtomicUsize::new(0));
+    // Use the sample_index from PlaybackControl for cross-thread tracking
+    let idx = control.sample_index.clone();
     let idx_clone = idx.clone();
     let total = samples.len();
     let control_clone = control.clone();
