@@ -6,4 +6,8 @@ edition = "2024"
 [dependencies]
 bytemuck = "1.23.1"
 cpal = "0.16.0"
+eframe = { version = "0.31.1", features = ["wgpu"] }
+egui = "0.31.1"
+egui_plot = "0.31.0"
 hound = "3.5.1"
+rfd = "0.15.3"
