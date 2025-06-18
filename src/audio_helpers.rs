@@ -16,6 +16,21 @@ pub fn load_audio_samples(path: &str) -> Option<Vec<f32>> {
     }
 }
 
+/// Load audio samples and sample rate from a WAV file
+pub fn load_audio_samples_and_rate(path: &str) -> Option<(Vec<f32>, u32)> {
+    if let Ok(mut reader) = WavReader::open(path) {
+        let spec = reader.spec();
+        let samples: Vec<f32> = if spec.sample_format == hound::SampleFormat::Float {
+            reader.samples::<f32>().filter_map(Result::ok).collect()
+        } else {
+            reader.samples::<i16>().filter_map(Result::ok).map(|s| s as f32 / i16::MAX as f32).collect()
+        };
+        Some((samples, spec.sample_rate))
+    } else {
+        None
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
