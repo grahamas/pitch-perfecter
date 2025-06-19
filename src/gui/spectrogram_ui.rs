@@ -6,6 +6,10 @@ use egui;
 
 /// Spectrogram plot UI: shows the log-magnitude spectrogram of the loaded audio file with a viridis-like color map and moving peak overlay
 pub fn spectrogram_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
+    // Disabled: spectrogram and overlay plot
+    ui.label("Spectrogram and overlay plot are temporarily disabled.");
+    return;
+
     // Only show for loaded files, not live recording
     if app.recording || app.file_path.trim().is_empty() {
         return;

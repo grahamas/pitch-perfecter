@@ -20,3 +20,21 @@ pub fn pitch_track(signal: &[f32], sample_rate: f32, window_size: usize, step_si
     }
     pitches
 }
+
+/// Estimate pitch using the pitch_detection crate's YIN implementation with custom power and clarity thresholds
+pub fn pitch_track_with_thresholds(signal: &[f32], sample_rate: f32, window_size: usize, step_size: usize, power_threshold: f64, clarity_threshold: f64) -> Vec<f32> {
+    let mut pitches = Vec::new();
+    let mut i = 0;
+    let padding = window_size / 2;
+    let mut detector = YINDetector::new(window_size, padding);
+    while i + window_size <= signal.len() {
+        let frame: Vec<f64> = signal[i..i+window_size].iter().map(|&x| x as f64).collect();
+        if let Some(pitch) = detector.get_pitch(&frame, sample_rate as usize, power_threshold, clarity_threshold) {
+            pitches.push(pitch.frequency as f32);
+        } else {
+            pitches.push(0.0);
+        }
+        i += step_size;
+    }
+    pitches
+}

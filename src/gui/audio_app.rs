@@ -27,6 +27,8 @@ pub struct AudioApp {
     pub cached_total_samples: Option<u32>,
     pub cached_duration_sec: Option<f32>,
     pub show_peak_overlay: bool, // Toggle for peak overlay
+    pub pitch_power_threshold: f64,
+    pub pitch_clarity_threshold: f64,
 }
 
 impl Default for AudioApp {
@@ -61,6 +63,8 @@ impl Default for AudioApp {
             cached_total_samples: None,
             cached_duration_sec: None,
             show_peak_overlay: true,
+            pitch_power_threshold: 5.0,
+            pitch_clarity_threshold: 0.1,
         };
         if !app.file_path.is_empty() {
             app.update_audio_metadata();

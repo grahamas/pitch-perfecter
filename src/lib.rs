@@ -5,3 +5,4 @@ pub mod gui;
 pub mod audio_controls;
 pub mod voice_synth;
 pub mod pitch_detection;
+pub mod music_notation;
