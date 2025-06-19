@@ -65,7 +65,7 @@ pub fn spectrogram_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
         let mut peak_points = Vec::with_capacity(n_time);
         for (t, &freq_bin) in peak_indices.iter().enumerate() {
             let x = t as f32 / n_time as f32; // normalized time
-            let y = 1.0 - (freq_bin as f32 / n_freq as f32); // normalized freq (flip y for image coordinates)
+            let y = freq_bin as f32 / n_freq as f32; // normalized freq (flip y for image coordinates)
             peak_points.push(egui::pos2(x, y));
         }
         // Draw image and overlay in a custom painter
@@ -82,14 +82,14 @@ pub fn spectrogram_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
         if peak_points.len() > 1 {
             for p in &peak_points {
                 // Map normalized coordinates to painter rect
-                let mapped = egui::pos2(rect.left() + p.x * rect.width(), rect.top() + (1.0 - p.y) * rect.height());
+                let mapped = egui::pos2(rect.left() + p.x * rect.width(), rect.top() + (p.y) * rect.height());
                 painter.add(Shape::circle_filled(mapped, 3.0, Color32::YELLOW));
             }
         }
         // Draw a vertical red line to indicate playback time
         if app.playing {
             // Align red line with spectrogram time bins (not raw samples), using cached metadata
-            if let (Some(sample_rate), Some(duration_sec)) = (app.cached_sample_rate, app.cached_duration_sec) {
+            if let (Some(_sample_rate), Some(duration_sec)) = (app.cached_sample_rate, app.cached_duration_sec) {
                 let mut elapsed_sec = 0.0;
                 if let Some(start) = app.playback_start {
                     elapsed_sec = std::time::Instant::now().duration_since(start).as_secs_f32();

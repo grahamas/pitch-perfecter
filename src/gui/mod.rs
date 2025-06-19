@@ -5,5 +5,3 @@ pub mod record_controls_ui;
 pub mod spectrogram_ui;
 pub mod status_ui;
 pub mod waveform_ui;
-
-pub use audio_app::AudioApp;

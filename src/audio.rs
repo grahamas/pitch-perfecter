@@ -2,7 +2,7 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter, WavReader, SampleFormat};
 use std::sync::{Arc, Mutex};
 
-use crate::{RecordingControl, PlaybackControl};
+use crate::audio_controls::{RecordingControl, PlaybackControl};
 
 pub fn play_audio_with_control_and_notify(path: &str, control: PlaybackControl, done_tx: std::sync::mpsc::Sender<()>) {
     let mut reader = WavReader::open(path).expect("WAV open");

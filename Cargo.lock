@@ -2861,7 +2861,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "pitch-perfecter"
+name = "pitch_perfecter"
 version = "0.1.0"
 dependencies = [
  "bytemuck",

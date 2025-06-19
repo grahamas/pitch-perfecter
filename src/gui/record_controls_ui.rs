@@ -1,7 +1,6 @@
 use super::audio_app::AudioApp;
-use crate::RecordingControl;
+use crate::audio_controls::RecordingControl;
 use egui;
-use std::sync::Arc;
 use chrono;
 
 /// Record controls UI: Record and Stop Recording buttons

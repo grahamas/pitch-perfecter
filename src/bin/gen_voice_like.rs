@@ -6,8 +6,8 @@ fn main() {
     let duration_sec = 5.0;
     let len = (sample_rate * duration_sec) as usize;
     let freq = 220.0;
-    let vibrato_freq = 5.0;
-    let vibrato_depth = 8.0;
+    let _vibrato_freq = 5.0;
+    let _vibrato_depth = 8.0;
     let harmonics = 8;
     let signal = voice_like_single_pitch(freq, harmonics, sample_rate, len);
 

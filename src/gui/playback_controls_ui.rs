@@ -1,5 +1,5 @@
 use super::audio_app::AudioApp;
-use crate::PlaybackControl;
+use crate::audio_controls::PlaybackControl;
 use egui;
 use std::sync::mpsc;
 

@@ -1,6 +1,6 @@
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
-use crate::{RecordingControl, PlaybackControl};
+use crate::audio_controls::{RecordingControl, PlaybackControl};
 use eframe::egui;
 
 

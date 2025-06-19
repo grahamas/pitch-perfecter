@@ -1,5 +1,5 @@
 //! Signal processing utilities: spectrum and spectrogram
-use rustfft::{FftPlanner, num_complex::Complex, num_traits::Zero};
+use rustfft::{FftPlanner, num_complex::Complex};
 
 /// Compute the magnitude spectrum of a real-valued signal (returns only positive frequencies)
 pub fn compute_spectrum(signal: &[f32]) -> Vec<f32> {
