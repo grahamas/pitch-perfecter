@@ -1,6 +1,7 @@
 use super::audio_app::AudioApp;
 use crate::audio_helpers;
 use crate::signal_processing;
+use crate::gui::peak_overlay;
 use egui;
 
 /// Spectrogram plot UI: shows the log-magnitude spectrogram of the loaded audio file with a viridis-like color map and moving peak overlay
@@ -35,7 +36,7 @@ pub fn spectrogram_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
         }
         // Convert to a flat Vec<u8> for egui::ColorImage
         let mut pixels = Vec::with_capacity(n_freq * n_time * 4);
-        for freq_bin in 0..n_freq {
+        for freq_bin in (0..n_freq).rev() {
             for t in 0..n_time {
                 let v = spectrogram[t][freq_bin];
                 let norm = if max_val > min_val {
@@ -59,15 +60,25 @@ pub fn spectrogram_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
         let time_label = format!("Time (s), step {:.3}s", step_sec);
         let freq_label = format!("Frequency (Hz), window {:.3}s", window_sec);
         ui.label(&time_label);
+        // Button to toggle peak overlay
+        if ui.button(if app.show_peak_overlay { "Hide Peak Overlay" } else { "Show Peak Overlay" }).clicked() {
+            app.show_peak_overlay = !app.show_peak_overlay;
+        }
         // Overlay: moving peak trace (yellow line)
         use egui::epaint::{Color32, Shape, Stroke};
-        let peak_indices = signal_processing::detect_moving_peak(&spectrogram);
-        let mut peak_points = Vec::with_capacity(n_time);
-        for (t, &freq_bin) in peak_indices.iter().enumerate() {
-            let x = t as f32 / n_time as f32; // normalized time
-            let y = freq_bin as f32 / n_freq as f32; // normalized freq (flip y for image coordinates)
-            peak_points.push(egui::pos2(x, y));
-        }
+        // Calculate pitch-based overlay (linear frequency mapping, no vertical flip)
+        let pitch_overlay_indices = {
+            use crate::pitch_detection::pitch_track;
+            let pitches = pitch_track(&samples, sample_rate as f32, window_size, step_size, 0.1);
+            pitches.iter().map(|&hz| {
+                if hz > 0.0 {
+                    let bin = (hz * window_size as f32 / sample_rate as f32).round() as usize;
+                    bin.min(n_freq - 1)
+                } else {
+                    n_freq - 1
+                }
+            }).collect::<Vec<_>>()
+        };
         // Draw image and overlay in a custom painter
         let (response, painter) = ui.allocate_painter(egui::vec2(600.0, 400.0), egui::Sense::hover());
         let rect = response.rect;
@@ -79,12 +90,8 @@ pub fn spectrogram_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
             Color32::WHITE,
         );
         // Draw the moving peak overlay as unconnected yellow points (circles)
-        if peak_points.len() > 1 {
-            for p in &peak_points {
-                // Map normalized coordinates to painter rect
-                let mapped = egui::pos2(rect.left() + p.x * rect.width(), rect.top() + (p.y) * rect.height());
-                painter.add(Shape::circle_filled(mapped, 3.0, Color32::YELLOW));
-            }
+        if app.show_peak_overlay {
+            crate::gui::peak_overlay::draw_peak_overlay(&pitch_overlay_indices, rect, &painter, n_freq, n_time);
         }
         // Draw a vertical red line to indicate playback time
         if app.playing {

@@ -26,6 +26,7 @@ pub struct AudioApp {
     pub cached_sample_rate: Option<u32>,
     pub cached_total_samples: Option<u32>,
     pub cached_duration_sec: Option<f32>,
+    pub show_peak_overlay: bool, // Toggle for peak overlay
 }
 
 impl Default for AudioApp {
@@ -59,6 +60,7 @@ impl Default for AudioApp {
             cached_sample_rate: None,
             cached_total_samples: None,
             cached_duration_sec: None,
+            show_peak_overlay: true,
         };
         if !app.file_path.is_empty() {
             app.update_audio_metadata();
