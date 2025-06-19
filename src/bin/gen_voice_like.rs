@@ -1,4 +1,4 @@
-use sound_synth::voice_synth::voice_like_single_pitch;
+use pitch_perfecter::voice_synth::voice_like_single_pitch;
 use hound::{WavWriter, WavSpec, SampleFormat};
 
 fn main() {
