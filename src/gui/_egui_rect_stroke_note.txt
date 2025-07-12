@@ -1,0 +1,12 @@
+// egui 0.31.1 Painter::rect_stroke signature:
+// pub fn rect_stroke(
+//     &self,
+//     rect: Rect,
+//     corner_radius: impl Into<CornerRadius>,
+//     stroke: impl Into<Stroke>,
+//     stroke_kind: StrokeKind,
+// ) -> ShapeIdx
+//
+// StrokeKind::default() is usually used for a normal border.
+// Usage example:
+// painter.rect_stroke(rect, corner_radius, stroke, StrokeKind::default());

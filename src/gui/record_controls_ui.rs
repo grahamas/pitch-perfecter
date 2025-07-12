@@ -1,5 +1,6 @@
 use super::audio_app::AudioApp;
 use crate::audio_controls::RecordingControl;
+use cpal::traits::{DeviceTrait, HostTrait};
 use egui;
 use chrono;
 
@@ -25,6 +26,13 @@ pub fn record_controls_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
                 app.recording_control = Some(control.clone());
                 app.recorded_samples.lock().unwrap().clear();
                 let live_buffer = app.recorded_samples.clone();
+
+                // Get the sample rate from the default input device
+                let host = cpal::default_host();
+                let device = host.default_input_device().expect("Failed to find input device");
+                let supported_config = device.default_input_config().expect("Failed to get default input config");
+                app.recording_sample_rate = Some(supported_config.sample_rate().0);
+
                 std::thread::spawn(move || {
                     crate::audio::record_audio_with_control_and_buffer(&path, control, live_buffer);
                 });

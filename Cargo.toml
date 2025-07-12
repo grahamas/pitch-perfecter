@@ -18,3 +18,5 @@ pyin = "1.2.0"
 ndarray = "0.16.1"
 pitch-detection = "0.3.0"
 sound_synth = { path = "../sound_synth" }
+fundsp = "0.16"
+colorous = "1"

@@ -1,4 +1,5 @@
 use egui::{epaint::{Color32, Shape}, Rect, Painter, pos2};
+use crate::track_pitch::{track_pitch, TrackPitchConfig};
 
 /// Draws the moving peak overlay as yellow circles on the given painter.
 /// - `peak_indices`: vector of frequency bin indices (one per time step)
@@ -15,4 +16,17 @@ pub fn draw_peak_overlay(peak_indices: &[usize], rect: Rect, painter: &Painter, 
             painter.add(Shape::circle_filled(mapped, 3.0, Color32::YELLOW));
         }
     }
+}
+
+pub fn get_peak_indices(samples: &[f32], config: TrackPitchConfig, sample_rate: usize, max_bin: usize) -> Vec<usize> {
+    let window_size = config.window_size;
+    let pitches = track_pitch(&samples, config, sample_rate);
+    pitches.iter().map(|&hz| {
+        if hz > 0.0 {
+            let bin = (hz * window_size as f64 / sample_rate as f64).round() as usize;
+            bin.min(max_bin - 1)
+        } else {
+            max_bin - 1
+        }
+    }).collect::<Vec<_>>()
 }

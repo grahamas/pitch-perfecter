@@ -4,49 +4,64 @@ use std::sync::{Arc, Mutex};
 
 use crate::audio_controls::{RecordingControl, PlaybackControl};
 
-pub fn play_audio_with_control_and_notify(path: &str, control: PlaybackControl, done_tx: std::sync::mpsc::Sender<()>) {
-    let mut reader = WavReader::open(path).expect("WAV open");
+#[derive(Clone)]
+pub struct LoadedAudio {
+    samples: Vec<f32>,
+    sample_rate: u32,
+    filepath: Option<String>,
+}
+
+// FIXME needs testing
+impl LoadedAudio {
+    pub fn new(samples: Vec<f32>, sample_rate: u32, filepath: Option<String>) -> Self {
+        LoadedAudio { samples, sample_rate, filepath }
+    }
+
+    pub fn samples(&self) -> &[f32] {
+        &self.samples
+    }
+
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
+    }
+
+    pub fn filepath(&self) -> Option<&str> {
+        self.filepath.as_deref()
+    }
+
+    pub fn update_filepath(&mut self, new_path: String) {
+        self.filepath = Some(new_path);
+    }
+
+    pub fn duration(&self) -> f32 {
+        self.samples.len() as f32 / self.sample_rate as f32
+    }
+
+    pub fn from_file(path: &str) -> Option<Self> {
+        if let Ok(mut reader) = WavReader::open(path) {
+            let spec = reader.spec();
+            let samples: Vec<f32> = if spec.sample_format == SampleFormat::Float {
+                reader.samples::<f32>().filter_map(Result::ok).collect()
+            } else {
+                reader.samples::<i16>().filter_map(Result::ok).map(|s| s as f32 / i16::MAX as f32).collect()
+            };
+            Some(LoadedAudio::new(samples, spec.sample_rate, Some(path.to_string())))
+        } else {
+            None
+        }
+    }
+}
+
+/// Load audio samples and sample rate from a file path
+pub fn load_audio_samples_and_rate(path: &str) -> Result<(Vec<f32>, u32), Box<dyn std::error::Error>> {
+    let mut reader = WavReader::open(path)?;
     let spec = reader.spec();
     let samples: Vec<f32> = if spec.sample_format == SampleFormat::Float {
-        reader.samples::<f32>().map(|s| s.unwrap()).collect()
+        reader.samples::<f32>().filter_map(Result::ok).collect()
     } else {
-        reader.samples::<i16>().map(|s| s.unwrap() as f32 / i16::MAX as f32).collect()
+        reader.samples::<i16>().filter_map(Result::ok).map(|s| s as f32 / i16::MAX as f32).collect()
     };
-    let host = cpal::default_host();
-    let device = host.default_output_device().expect("No output device");
-    let out_config = cpal::StreamConfig {
-        channels: spec.channels,
-        sample_rate: cpal::SampleRate(spec.sample_rate),
-        buffer_size: cpal::BufferSize::Default,
-    };
-    // Use the sample_index from PlaybackControl for cross-thread tracking
-    let idx = control.sample_index.clone();
-    let idx_clone = idx.clone();
-    let total = samples.len();
-    let control_clone = control.clone();
-    let stream = device.build_output_stream(
-        &out_config,
-        move |out: &mut [f32], _| {
-            for sample in out.iter_mut() {
-                if control_clone.should_stop() {
-                    *sample = 0.0;
-                    continue;
-                }
-                let i = idx_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
-                *sample = if i < total { samples[i] } else { 0.0 };
-            }
-        },
-        move |err| eprintln!("Stream error: {:?}", err),
-        None,
-    ).unwrap();
-    stream.play().unwrap();
-    println!("Playing...");
-    // Wait until all samples are played or stop is requested
-    while idx.load(std::sync::atomic::Ordering::SeqCst) < total && !control.should_stop() {
-        std::thread::sleep(std::time::Duration::from_millis(50));
-    }
-    drop(stream);
-    let _ = done_tx.send(());
+    Ok((samples, spec.sample_rate))
 }
 
 pub fn record_audio_with_control_and_buffer(wav_path: &str, control: RecordingControl, live_buffer: Arc<Mutex<Vec<f32>>>) {
@@ -108,4 +123,51 @@ pub fn record_audio_with_control_and_buffer(wav_path: &str, control: RecordingCo
     }
     writer.finalize().unwrap();
     println!("Saved to {wav_path}");
+}
+
+pub fn play_audio_with_control_and_notify_cleaned(path: &str, control: PlaybackControl, done_tx: std::sync::mpsc::Sender<()>, use_cleaning: bool) {
+    let mut reader = WavReader::open(path).expect("WAV open");
+    let spec = reader.spec();
+    let mut samples: Vec<f32> = if spec.sample_format == SampleFormat::Float {
+        reader.samples::<f32>().map(|s| s.unwrap()).collect()
+    } else {
+        reader.samples::<i16>().map(|s| s.unwrap() as f32 / i16::MAX as f32).collect()
+    };
+    if use_cleaning {
+        let noise_spectrum = crate::signal_cleaning::estimate_noise_spectrum(&samples, spec.sample_rate as f32);
+        samples = crate::signal_cleaning::clean_signal_for_pitch(&samples, spec.sample_rate as f32, Some(&noise_spectrum), None);
+    }
+    let host = cpal::default_host();
+    let device = host.default_output_device().expect("No output device");
+    let out_config = cpal::StreamConfig {
+        channels: spec.channels,
+        sample_rate: cpal::SampleRate(spec.sample_rate),
+        buffer_size: cpal::BufferSize::Default,
+    };
+    let idx = control.sample_index.clone();
+    let idx_clone = idx.clone();
+    let total = samples.len();
+    let control_clone = control.clone();
+    let stream = device.build_output_stream(
+        &out_config,
+        move |out: &mut [f32], _| {
+            for sample in out.iter_mut() {
+                if control_clone.should_stop() {
+                    *sample = 0.0;
+                    continue;
+                }
+                let i = idx_clone.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                *sample = if i < total { samples[i] } else { 0.0 };
+            }
+        },
+        move |err| eprintln!("Stream error: {:?}", err),
+        None,
+    ).unwrap();
+    stream.play().unwrap();
+    println!("Playing...");
+    while idx.load(std::sync::atomic::Ordering::SeqCst) < total && !control.should_stop() {
+        std::thread::sleep(std::time::Duration::from_millis(50));
+    }
+    drop(stream);
+    let _ = done_tx.send(());
 }

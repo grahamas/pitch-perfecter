@@ -15,8 +15,9 @@ pub fn playback_controls_ui(app: &mut AudioApp, ui: &mut egui::Ui) {
             app.playback_control = Some(control.clone());
             let (tx, rx) = mpsc::channel();
             app.playback_done_rx = Some(rx);
+            let use_cleaning = app.clean_playback_signal;
             std::thread::spawn(move || {
-                crate::audio::play_audio_with_control_and_notify(&path, control, tx);
+                crate::audio::play_audio_with_control_and_notify_cleaned(&path, control, tx, use_cleaning);
             });
         }
         // Stop Playback button

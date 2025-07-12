@@ -1,5 +1,5 @@
-// Pitch detection tests for the current pitch_track implementation
-use pitch_perfecter::pitch_detection::pitch_track;
+// Pitch detection tests for the current track_pitch implementation
+use pitch_perfecter::track_pitch::track_pitch;
 use plotters::prelude::*;
 use hound::{WavWriter, WavSpec, SampleFormat};
 use std::f32::consts::PI;
@@ -11,7 +11,7 @@ fn sine_wave(freq: f32, sample_rate: f32, len: usize) -> Vec<f32> {
 }
 
 #[test]
-fn test_pitch_track_length() {
+fn test_track_pitch_length() {
     let sample_rate = 16000.0;
     let freq = 440.0;
     let len = 4096;
@@ -19,13 +19,13 @@ fn test_pitch_track_length() {
     let step = 256;
     let threshold = 0.15;
     let signal = sine_wave(freq, sample_rate, len);
-    let pitches = pitch_track(&signal, sample_rate, window, step, threshold);
+    let pitches = track_pitch(&signal, sample_rate, window, step, threshold);
     // Basic sanity check: output length
     assert_eq!(pitches.len(), ((len - window) / step + 1));
 }
 
 #[test]
-fn test_pitch_track_accuracy_across_range() {
+fn test_track_pitch_accuracy_across_range() {
     let sample_rate = 44100.0;
     let duration_sec = 1.0;
     let len = (sample_rate * duration_sec) as usize;
@@ -39,7 +39,7 @@ fn test_pitch_track_accuracy_across_range() {
     let mut true_pitches = Vec::new();
     let mut detected_pitches = Vec::new();
     std::fs::create_dir_all("test_outputs").unwrap();
-    println!("[DEBUG] Starting test_pitch_track_accuracy_across_range");
+    println!("[DEBUG] Starting test_track_pitch_accuracy_across_range");
     for (idx, &freq) in test_freqs.iter().enumerate() {
         println!("[DEBUG] Generating signal for freq: {} Hz", freq);
         // Use a simple sine wave for each test frequency
@@ -54,7 +54,7 @@ fn test_pitch_track_accuracy_across_range() {
         let mut writer = WavWriter::create(&wav_path, spec).unwrap();
         for s in &signal { writer.write_sample(*s).unwrap(); }
         writer.finalize().unwrap();
-        let pitches = pitch_track(&signal, sample_rate, window, step, threshold);
+        let pitches = track_pitch(&signal, sample_rate, window, step, threshold);
         let mut valid: Vec<f32> = pitches.into_iter().filter(|&p| p > 0.0).collect();
         valid.sort_by(|a, b| a.partial_cmp(b).unwrap());
         let median = if valid.is_empty() { 0.0 } else { valid[valid.len()/2] };
@@ -80,7 +80,7 @@ fn test_pitch_track_accuracy_across_range() {
         true_pitches.iter().zip(detected_pitches.iter()).map(|(&x, &y)|
             Circle::new((x, y), 6, RED.filled())
         )
-    ).unwrap().label("pitch_track").legend(|(x, y)| Circle::new((x, y), 6, RED.filled()));
+    ).unwrap().label("track_pitch").legend(|(x, y)| Circle::new((x, y), 6, RED.filled()));
     chart.draw_series(LineSeries::new(
         (60..1100).map(|v| (v as f32, v as f32)),
         &BLACK,

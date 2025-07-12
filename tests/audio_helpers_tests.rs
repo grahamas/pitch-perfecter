@@ -1,4 +1,4 @@
-use pitch_perfecter::audio_helpers::*;
+use pitch_perfecter::audio::*;
 
 #[test]
 fn test_load_audio_samples_nonexistent() {

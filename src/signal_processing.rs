@@ -1,15 +1,85 @@
 //! Signal processing utilities: spectrum and spectrogram
-use rustfft::{FftPlanner, num_complex::Complex};
+use rustfft::{FftPlanner, num_complex::Complex, FftDirection};
 
-/// Compute the magnitude spectrum of a real-valued signal (returns only positive frequencies)
-pub fn compute_spectrum(signal: &[f32]) -> Vec<f32> {
+/// Struct representing a computed spectrum, with ability to invert (IFFT) back to time domain
+pub struct Spectrum {
+    pub complex: Vec<Complex<f32>>, // Full complex spectrum (not just magnitudes)
+    pub n: usize,                   // FFT size
+}
+
+impl Spectrum {
+    /// Get the magnitude spectrum (positive frequencies only)
+    pub fn magnitudes(&self) -> Vec<f32> {
+        self.complex[..self.n/2].iter().map(|c| c.norm()).collect()
+    }
+
+    /// Invert the spectrum back to the time domain (real part only)
+    pub fn to_time_domain(&self) -> Vec<f32> {
+        let mut buffer = self.complex.clone();
+        let mut planner = FftPlanner::<f32>::new();
+        let ifft = planner.plan_fft(self.n, FftDirection::Inverse);
+        ifft.process(&mut buffer);
+        buffer.iter().map(|c| c.re / self.n as f32).collect()
+    }
+
+    // Get the complex value at index i
+    pub fn get(&self, i: usize) -> Option<&Complex<f32>> {
+        self.complex.get(i)
+    }
+}
+
+/// Compute the full spectrum of a real-valued signal (returns Spectrum struct)
+pub fn compute_spectrum(signal: &[f32]) -> Spectrum {
     let n = signal.len();
     let mut planner = FftPlanner::<f32>::new();
     let fft = planner.plan_fft_forward(n);
     let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
     fft.process(&mut buffer);
-    // Return magnitude for positive frequencies only
-    buffer[..n/2].iter().map(|c| c.norm()).collect()
+    Spectrum { complex: buffer, n }
+}
+
+// TODO add frequency axis
+pub struct Spectrogram {
+    pub spectra: Vec<Vec<f32>>, // Vec of spectra (each spectrum is Vec<f32>)
+    pub window_size: usize,      // Size of each FFT window
+    pub step_size: usize,        // Step size between windows
+}
+
+impl Spectrogram {
+    pub fn from_waveform(signal: &[f32], config: SpectrogramConfig) -> Self {
+        let spectra = compute_spectrogram(signal, config.window_size, config.step_size);
+        Self {
+            spectra,
+            window_size: config.window_size,
+            step_size: config.step_size,
+        }
+    }
+    /// Get the number of time steps in the spectrogram
+    pub fn n_time_steps(&self) -> usize {
+        self.spectra.len()
+    }
+    /// Get the number of frequency bins in each spectrum
+    pub fn n_freq_bins(&self) -> usize {
+        if self.spectra.is_empty() {
+            0
+        } else {
+            self.spectra[0].len()
+        }
+    }
+}
+
+pub struct SpectrogramConfig {
+    pub window_size: usize, // Number of samples per FFT window
+    pub step_size: usize,   // Number of samples to step between windows
+}
+
+impl SpectrogramConfig { 
+    pub fn default() -> Self {
+        Self {
+            window_size: 1024,
+            step_size: 256,
+        }
+    }
 }
 
 /// Compute the spectrogram of a real-valued signal
@@ -21,20 +91,13 @@ pub fn compute_spectrogram(signal: &[f32], window_size: usize, step_size: usize)
     let mut i = 0;
     while i + window_size <= signal.len() {
         let window = &signal[i..i+window_size];
-        result.push(compute_spectrum(window));
+        let spectrum = compute_spectrum(window).magnitudes();
+        // Only keep the positive frequencies (first half of the spectrum)
+        let spectrum = spectrum[..window_size/2].to_vec();
+        result.push(spectrum);
         i += step_size;
     }
     result
-}
-
-/// Compute the log-magnitude spectrogram of a real-valued signal
-/// Returns: Vec of log-spectra (each spectrum is Vec<f32>)
-pub fn compute_log_spectrogram(signal: &[f32], window_size: usize, step_size: usize) -> Vec<Vec<f32>> {
-    let spectrogram = compute_spectrogram(signal, window_size, step_size);
-    spectrogram
-        .into_iter()
-        .map(|spec| spec.into_iter().map(|v| (v + 1e-12).log10()).collect())
-        .collect()
 }
 
 /// Find the index and value of the peak in a spectrum
@@ -75,21 +138,8 @@ mod tests {
         let spectrum = compute_spectrum(&signal);
         // The peak should be at bin k = freq * N / sample_rate
         let k = (freq * len as f32 / sample_rate).round() as usize;
-        let max_bin = spectrum.iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
+        let max_bin = spectrum.magnitudes().iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
         assert_eq!(k, max_bin);
-    }
-
-    #[test]
-    fn test_log_spectrogram_shape() {
-        let sample_rate = 1000.0;
-        let freq = 50.0;
-        let len = 2000;
-        let signal = sine_wave(freq, sample_rate, len);
-        let window = 200;
-        let step = 100;
-        let spec = compute_log_spectrogram(&signal, window, step);
-        assert_eq!(spec.len(), (len - window) / step + 1);
-        assert_eq!(spec[0].len(), window / 2); // Only positive freqs
     }
 
     #[test]
@@ -104,11 +154,11 @@ mod tests {
         let spec = compute_spectrum(&signal);
         let k1 = (100.0 * len as f32 / sample_rate).round() as usize;
         let k2 = (200.0 * len as f32 / sample_rate).round() as usize;
-        let max1 = spec[k1];
-        let max2 = spec[k2];
+        let max1 = spec.magnitudes()[k1];
+        let max2 = spec.magnitudes()[k2];
         // Both peaks should be prominent
-        assert!(max1 > 0.5 * spec.iter().cloned().fold(0.0, f32::max));
-        assert!(max2 > 0.5 * spec.iter().cloned().fold(0.0, f32::max));
+        assert!(max1 > 0.5 * spec.magnitudes().iter().cloned().fold(0.0, f32::max));
+        assert!(max2 > 0.5 * spec.magnitudes().iter().cloned().fold(0.0, f32::max));
     }
 
     #[test]

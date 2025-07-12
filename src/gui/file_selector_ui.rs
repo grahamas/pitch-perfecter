@@ -2,6 +2,7 @@ use super::audio_app::AudioApp;
 use egui::{self, Ui};
 use rfd::FileDialog;
 use std::env;
+use crate::audio::LoadedAudio;
 
 /// File selection UI: open/save dialogs and file path entry
 pub fn file_selector_ui(app: &mut AudioApp, ui: &mut Ui) {
@@ -16,7 +17,7 @@ pub fn file_selector_ui(app: &mut AudioApp, ui: &mut Ui) {
             if let Some(path) = FileDialog::new().set_directory(&audio_dir).pick_file() {
                 if let Some(path_str) = path.to_str() {
                     app.file_path = path_str.to_owned();
-                    app.update_audio_metadata(); // Update cache on file select
+                    app.loaded_audio = LoadedAudio::from_file(&app.file_path); // Update cache on file select
                 }
             }
         }
@@ -25,7 +26,9 @@ pub fn file_selector_ui(app: &mut AudioApp, ui: &mut Ui) {
             if let Some(path) = FileDialog::new().set_directory(&audio_dir).set_file_name(&app.file_path).save_file() {
                 if let Some(path_str) = path.to_str() {
                     app.file_path = path_str.to_owned();
-                    app.update_audio_metadata(); // Update cache on file save
+                    if let Some(loaded_audio) = &mut app.loaded_audio {
+                        loaded_audio.update_filepath(path_str.to_owned()); // Update loaded audio path
+                    }
                 }
             }
         }

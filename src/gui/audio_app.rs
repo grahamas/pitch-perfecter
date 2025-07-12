@@ -1,8 +1,11 @@
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc;
 use crate::audio_controls::{RecordingControl, PlaybackControl};
+use crate::audio::LoadedAudio;
 use eframe::egui;
 
+use crate::track_pitch;
+use crate::signal_processing::{Spectrogram, SpectrogramConfig};
 
 use super::file_selector_ui::file_selector_ui;
 use super::record_controls_ui::record_controls_ui;
@@ -10,6 +13,7 @@ use super::playback_controls_ui::playback_controls_ui;
 use super::status_ui::status_ui;
 use super::waveform_ui::waveform_ui;
 use super::spectrogram_ui::spectrogram_ui;
+use super::note_display_ui::note_display_ui;
 
 /// Main application state for Pitch Perfecter
 pub struct AudioApp {
@@ -23,12 +27,14 @@ pub struct AudioApp {
     pub recorded_samples: Arc<Mutex<Vec<f32>>>,
     pub playback_start: Option<std::time::Instant>, // Track playback start time
     // Cached audio metadata
-    pub cached_sample_rate: Option<u32>,
-    pub cached_total_samples: Option<u32>,
-    pub cached_duration_sec: Option<f32>,
     pub show_peak_overlay: bool, // Toggle for peak overlay
-    pub pitch_power_threshold: f64,
-    pub pitch_clarity_threshold: f64,
+    pub track_pitch_config: track_pitch::TrackPitchConfig,
+    pub show_signal_cleaning: bool, // Toggle for signal cleaning
+    pub clean_playback_signal: bool, // Toggle for playback and spectrogram cleaning
+    pub loaded_audio: Option<LoadedAudio>,
+    pub spectrogram_config: SpectrogramConfig,
+    pub loaded_spectrogram: Option<Spectrogram>,
+    pub recording_sample_rate: Option<u32>, // Sample rate of the current recording device
 }
 
 impl Default for AudioApp {
@@ -50,7 +56,20 @@ impl Default for AudioApp {
                 }
             }
         }
-        let mut app = Self {
+
+        let loaded_audio = LoadedAudio::from_file(&default_file);
+        let _spectrogram = if let Some(audio) = loaded_audio.clone() {
+            // Generate spectrogram from waveform if available
+            Some(
+                Spectrogram::from_waveform(
+                    audio.samples(),
+                    SpectrogramConfig::default(),
+                ))
+        } else {
+            None
+        };
+
+        let app = Self {
             file_path: default_file,
             recording: false,
             playing: false,
@@ -59,35 +78,20 @@ impl Default for AudioApp {
             playback_done_rx: None,
             recorded_samples: Arc::new(Mutex::new(Vec::new())),
             playback_start: None,
-            cached_sample_rate: None,
-            cached_total_samples: None,
-            cached_duration_sec: None,
             show_peak_overlay: true,
-            pitch_power_threshold: 5.0,
-            pitch_clarity_threshold: 0.1,
+            track_pitch_config: track_pitch::TrackPitchConfig::default(),
+            show_signal_cleaning: true, // Default: enabled
+            clean_playback_signal: false, // Default: off
+            loaded_audio: loaded_audio,
+            recording_sample_rate: None,
+            loaded_spectrogram: None,
+            spectrogram_config: SpectrogramConfig::default(),
         };
-        if !app.file_path.is_empty() {
-            app.update_audio_metadata();
-        }
         app
     }
 }
 
 impl AudioApp {
-    pub fn update_audio_metadata(&mut self) {
-        if let Ok(reader) = hound::WavReader::open(&self.file_path) {
-            let spec = reader.spec();
-            let total_samples = reader.duration();
-            let duration_sec = total_samples as f32 / spec.sample_rate as f32;
-            self.cached_sample_rate = Some(spec.sample_rate);
-            self.cached_total_samples = Some(total_samples as u32);
-            self.cached_duration_sec = Some(duration_sec);
-        } else {
-            self.cached_sample_rate = None;
-            self.cached_total_samples = None;
-            self.cached_duration_sec = None;
-        }
-    }
     // UI wrappers
     pub fn file_selector_ui(&mut self, ui: &mut egui::Ui) {
         file_selector_ui(self, ui);
@@ -126,8 +130,20 @@ impl eframe::App for AudioApp {
         if self.playing {
             ctx.request_repaint_after(std::time::Duration::from_millis(16)); // ~60 FPS
         }
-        egui::CentralPanel::default().show(ctx, |ui| {
+        // Use SidePanel for the right note display
+        egui::SidePanel::right("note_display_panel").min_width(220.0).show(ctx, |ui| {
+            ui.add_space(32.0);
             ui.vertical_centered(|ui| {
+            ui.group(|ui| {
+                note_display_ui(self, ui);
+            });});
+            ui.add_space(18.0);
+            crate::gui::note_display_ui::signal_cleaning_toggle_ui(self, ui);
+            crate::gui::note_display_ui::pitch_tracker_controls_ui(self, ui);
+        });
+        egui::CentralPanel::default().show(ctx, |ui| {
+            ui.vertical(|ui| {
+                ui.set_min_width(400.0);
                 ui.add_space(10.0);
                 ui.heading(egui::RichText::new("Pitch Perfecter Audio Recorder").size(28.0).strong());
                 ui.add_space(20.0);
