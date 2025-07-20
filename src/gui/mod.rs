@@ -1,9 +1,0 @@
-pub mod audio_app;
-pub mod file_selector_ui;
-pub mod playback_controls_ui;
-pub mod record_controls_ui;
-pub mod spectrogram_ui;
-pub mod status_ui;
-pub mod waveform_ui;
-pub mod peak_overlay;
-pub mod note_display_ui;
