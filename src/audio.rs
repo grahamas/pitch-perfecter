@@ -1,56 +1,56 @@
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use hound::{WavSpec, WavWriter, WavReader, SampleFormat};
+use std::path::Iter;
 use std::sync::{Arc, Mutex};
+use crate::strided_chunks::StridedChunks;
 
 use crate::audio_controls::{RecordingControl, PlaybackControl};
 
-#[derive(Clone)]
-pub struct LoadedAudio {
-    samples: Vec<f32>,
-    sample_rate: u32,
-    filepath: Option<String>,
+pub trait Audio {
+    fn sample_rate(&self) -> u32;
 }
 
-// FIXME needs testing
-impl LoadedAudio {
-    pub fn new(samples: Vec<f32>, sample_rate: u32, filepath: Option<String>) -> Self {
-        LoadedAudio { samples, sample_rate, filepath }
-    }
+pub trait IterableAudio: Audio {
+    fn sliding_windows<'a>(&'a self, window_size: usize, step_size: usize) -> impl Iterator<Item = Self>
+    where
+        Self: Sized;
+}
 
-    pub fn samples(&self) -> &[f32] {
-        &self.samples
-    }
+pub trait MonoAudioSource: Audio {
+    fn mono_samples(&self) -> &[f32];
+}
 
-    pub fn sample_rate(&self) -> u32 {
+#[derive(Debug, Clone)]
+pub struct MonoAudio {
+    pub samples: Vec<f32>,
+    pub sample_rate: u32,
+}
+
+impl MonoAudio {
+    pub fn new(samples: Vec<f32>, sample_rate: u32) -> Self {
+        MonoAudio { samples, sample_rate }
+    }
+}
+impl Audio for MonoAudio {
+    fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
-
-    pub fn filepath(&self) -> Option<&str> {
-        self.filepath.as_deref()
-    }
-
-    pub fn update_filepath(&mut self, new_path: String) {
-        self.filepath = Some(new_path);
-    }
-
-    pub fn duration(&self) -> f32 {
-        self.samples.len() as f32 / self.sample_rate as f32
-    }
-
-    pub fn from_file(path: &str) -> Option<Self> {
-        if let Ok(mut reader) = WavReader::open(path) {
-            let spec = reader.spec();
-            let samples: Vec<f32> = if spec.sample_format == SampleFormat::Float {
-                reader.samples::<f32>().filter_map(Result::ok).collect()
-            } else {
-                reader.samples::<i16>().filter_map(Result::ok).map(|s| s as f32 / i16::MAX as f32).collect()
-            };
-            Some(LoadedAudio::new(samples, spec.sample_rate, Some(path.to_string())))
-        } else {
-            None
-        }
+}
+impl MonoAudioSource for MonoAudio {
+    fn mono_samples(&self) -> &[f32] {
+        &self.samples
     }
 }
+
+impl IterableAudio for MonoAudio {
+    fn sliding_windows(&self, window_size: usize, step_size: usize) -> impl Iterator<Item = MonoAudio> {
+        StridedChunks::new(self.samples.clone(), window_size, step_size)
+            .map(move |chunk| MonoAudio::new(chunk.to_vec(), self.sample_rate))
+    }
+}
+
+
+/// FIXME below this line
 
 /// Load audio samples and sample rate from a file path
 pub fn load_audio_samples_and_rate(path: &str) -> Result<(Vec<f32>, u32), Box<dyn std::error::Error>> {
@@ -65,6 +65,10 @@ pub fn load_audio_samples_and_rate(path: &str) -> Result<(Vec<f32>, u32), Box<dy
 }
 
 pub fn record_audio_with_control_and_buffer(wav_path: &str, control: RecordingControl, live_buffer: Arc<Mutex<Vec<f32>>>) {
+    record_audio_with_control_and_buffer_optional_save(Some(wav_path), control, live_buffer);
+}
+
+pub fn record_audio_with_control_and_buffer_optional_save(wav_path: Option<&str>, control: RecordingControl, live_buffer: Arc<Mutex<Vec<f32>>>) {
     let host = cpal::default_host();
     let device = host.default_input_device().expect("Failed to find input device");
     let supported_config = device.default_input_config().expect("Failed to get default input config");
@@ -117,12 +121,16 @@ pub fn record_audio_with_control_and_buffer(wav_path: &str, control: RecordingCo
         bits_per_sample: 32,
         sample_format: SampleFormat::Float,
     };
-    let mut writer = WavWriter::create(wav_path, spec).expect("WAV writer");
-    for &s in &samples {
-        writer.write_sample(s).unwrap();
+    
+    // Only save to file if path is provided
+    if let Some(path) = wav_path {
+        let mut writer = WavWriter::create(path, spec).expect("WAV writer");
+        for &s in &samples {
+            writer.write_sample(s).unwrap();
+        }
+        writer.finalize().unwrap();
+        println!("Saved to {path}");
     }
-    writer.finalize().unwrap();
-    println!("Saved to {wav_path}");
 }
 
 pub fn play_audio_with_control_and_notify_cleaned(path: &str, control: PlaybackControl, done_tx: std::sync::mpsc::Sender<()>, use_cleaning: bool) {
