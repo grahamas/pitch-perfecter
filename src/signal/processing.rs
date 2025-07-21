@@ -1,3 +1,5 @@
+/// FIXME  file needs refinement after AI
+
 //! Signal processing utilities: spectrum and spectrogram
 use rustfft::{FftPlanner, num_complex::Complex, FftDirection};
 

@@ -1,3 +1,5 @@
+/// FIXME file needs refinement after AI
+
 //! Audio signal cleaning and noise reduction functionality
 //! 
 //! This module provides tools for improving audio quality for pitch detection:
@@ -18,6 +20,9 @@ pub const DEFAULT_VOCAL_HIGH_HZ: f32 = 1200.0;
 /// Uses fundsp's bandpass filter with center frequency and Q factor calculation.
 /// This removes both low-frequency rumble and high-frequency noise that can
 /// interfere with pitch detection.
+/// 
+/// FIXME This function currently does not use the sample rate parameter,
+/// Obviously it needs the sample rate to properly calculate the filter coefficients.
 /// 
 /// # Arguments
 /// * `samples` - Input audio samples
@@ -65,6 +70,23 @@ pub fn clean_signal_for_pitch(
     match noise_spectrum {
         Some(noise_spec) => apply_spectral_gating(samples, noise_spec, noise_threshold),
         None => bandpass_vocal_range(samples, sample_rate, DEFAULT_VOCAL_LOW_HZ, DEFAULT_VOCAL_HIGH_HZ),
+    }
+}
+pub fn clean_audio_for_pitch(
+    audio: &audio::MonoAudio,
+    noise_spectrum: Option<&Spectrum>,
+    noise_threshold: Option<f32>
+) -> audio::MonoAudio {
+    let cleaned_samples = clean_signal_for_pitch(
+        &audio.samples,
+        audio.sample_rate as f32,
+        noise_spectrum,
+        noise_threshold
+    );
+    
+    audio::MonoAudio {
+        samples: cleaned_samples,
+        sample_rate: audio.sample_rate,
     }
 }
 
@@ -121,10 +143,18 @@ fn apply_spectral_gating(
 /// 
 /// # Returns
 /// Frequency spectrum representing the background noise profile
-pub fn estimate_noise_spectrum(samples: &[f32], sample_rate: f32) -> Spectrum {
+pub fn _estimate_noise_spectrum(samples: &[f32], sample_rate: f32) -> Spectrum {
     let start_idx = (0.2 * sample_rate) as usize;
     let end_idx = (1.5 * sample_rate).min(samples.len() as f32) as usize;
     
     let noise_window = &samples[start_idx..end_idx];
     compute_spectrum(noise_window)
+}
+
+pub fn estimate_noise_spectrum(audio: &audio::MonoAudio) -> Option<Spectrum> {
+    if audio.samples.is_empty() {
+        return None;
+    }
+    
+    Some(_estimate_noise_spectrum(&audio.samples, audio.sample_rate as f32))
 }

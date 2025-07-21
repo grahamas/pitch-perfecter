@@ -35,17 +35,19 @@ pub fn track_pitch(audio: impl IterableAudio, config: PitchTrackerConfig, sample
         clarity_threshold,
     } = config;
     let mut pitches = Vec::new();
-    let mut i = 0;
     let padding = window_size / 2;
     let mut detector = YINDetector::new(window_size, padding);
-    while i + window_size <= signal.len() {
-        let frame: Vec<f64> = signal[i..i+window_size].iter().map(|&x| x as f64).collect();
-        if let Some(pitch) = detector.get_pitch(&frame, sample_rate, power_threshold, clarity_threshold) {
+    for window in audio.sliding_windows(window_size, step_size) {
+        let signal = window.mono_samples();
+        if signal.len() < window_size {
+            warn!("Not enough samples for pitch detection");
+            continue; // Skip if not enough samples
+        }
+        if let Some(pitch) = detector.get_pitch(&signal, sample_rate, power_threshold, clarity_threshold) {
             pitches.push(pitch.frequency);
         } else {
             pitches.push(0.0);
         }
-        i += step_size;
     }
     pitches
 }
