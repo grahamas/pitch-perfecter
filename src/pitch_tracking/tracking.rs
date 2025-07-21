@@ -1,28 +1,34 @@
-use pitch_detection::detector::yin::YINDetector;
-use pitch_detection::detector::PitchDetector;
+use detection::PitchDetector;
+use crate::audio::{Audio, MonoAudioSource};
 
 #[derive(Clone, Copy)]
-pub struct TrackPitchConfig {
-    pub window_size: usize,
-    pub step_size: usize,
-    pub power_threshold: f64,
-    pub clarity_threshold: f64,
+pub struct PitchTracker {
+    detector: impl PitchDetector,
+    window_size: usize,
+    step_size: usize,
 }
 
-impl TrackPitchConfig {
-    pub fn default() -> Self {
-        Self {
-            window_size: 1024,
-            step_size: 256,
-            power_threshold: 5.0,
-            clarity_threshold: 0.1,
+impl PitchTracker {
+    pub fn track_pitch(
+        &mut self,
+        audio: impl IterableAudio<f64>,
+    ) -> Vec<f64> {
+        let mut pitches = Vec::new();
+        for window in audio.sliding_windows(self.window_size, self.step_size) {
+            if let Some(pitch) = self.detector.get_pitch(window) {
+                pitches.push(pitch.frequency);
+            } else {
+                pitches.push(0.0);
+            }
         }
+        pitches
     }
+
 }
 
 /// Estimate pitch using the track_pitch crate's YIN implementation with custom power and clarity thresholds
-pub fn track_pitch(signal: &[f32], config: TrackPitchConfig, sample_rate: usize) -> Vec<f64> {
-    let TrackPitchConfig {
+pub fn track_pitch(audio: impl IterableAudio, config: PitchTrackerConfig, sample_rate: usize) -> Vec<f64> {
+    let PitchTrackerConfig {
         window_size,
         step_size,
         power_threshold,
