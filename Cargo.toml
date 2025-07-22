@@ -20,3 +20,5 @@ pitch-detection = "0.3.0"
 sound_synth = { path = "../sound_synth" }
 fundsp = "0.16"
 colorous = "1"
+tempfile = "3.20.0"
+log = "0.4.27"
