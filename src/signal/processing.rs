@@ -3,8 +3,6 @@
 //! It includes functionalities for cleaning audio signals, computing spectra, and spectrograms.
 //! 
 
-use super::types::{Spectrum, Spectrogram};
-
 /// Find the index and value of the peak in a signal
 /// FIXME There must be a better way to do this (library function, or more robust)
 pub fn find_peak(signal: &[f32]) -> Option<(usize, f32)> {
@@ -18,6 +16,7 @@ pub fn find_peak(signal: &[f32]) -> Option<(usize, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::signal::types::Spectrum;
     use std::f32::consts::PI;
 
     // Helper: generate a sine wave

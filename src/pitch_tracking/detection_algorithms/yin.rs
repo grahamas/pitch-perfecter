@@ -1,7 +1,7 @@
 use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
-use crate::audio::{MonoAudioSource, Audio};
+use crate::audio::MonoAudioSource;
 
 
 pub struct ExternalYinDetector {
@@ -40,11 +40,11 @@ mod tests {
     #[test]
     fn test_external_yin_detector_sine_wave() {
         // Generate a 440 Hz sine wave
-        let sample_rate = 8000;
+        let sample_rate = 8000.0;
         let freq = 440.0;
         let n = 1024;
         let signal: Vec<f32> = (0..n)
-            .map(|i| (2.0 * std::f32::consts::PI * freq * i as f32 / sample_rate as f32).sin())
+            .map(|i| (2.0 * std::f32::consts::PI * freq * i as f32 / sample_rate).sin())
             .collect();
         let audio = MonoAudio { samples: signal, sample_rate };
         let mut detector = ExternalYinDetector::new(0.1, 0.9, n, n/2);

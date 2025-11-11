@@ -111,7 +111,6 @@ impl SpectrogramConfig {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustfft::num_complex::Complex;
 
     #[test]
     fn test_spectrum_from_waveform_and_magnitudes() {

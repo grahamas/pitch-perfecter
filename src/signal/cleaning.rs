@@ -224,7 +224,7 @@ mod tests {
 
     #[test]
     fn test_clean_audio_for_pitch() {
-        let audio = MonoAudio { samples: vec![0.0, 1.0, 0.0, -1.0], sample_rate: 44100 };
+        let audio = MonoAudio { samples: vec![0.0, 1.0, 0.0, -1.0], sample_rate: 44100.0 };
         let cleaned = clean_audio_for_pitch(&audio, None, None);
         assert_eq!(cleaned.samples.len(), audio.samples.len());
         assert_eq!(cleaned.sample_rate, audio.sample_rate);
@@ -232,7 +232,7 @@ mod tests {
 
     #[test]
     fn test_estimate_noise_spectrum_empty() {
-        let audio = MonoAudio { samples: vec![], sample_rate: 44100 };
+        let audio = MonoAudio { samples: vec![], sample_rate: 44100.0 };
         assert!(estimate_noise_spectrum(&audio).is_none());
     }
 
@@ -241,7 +241,7 @@ mod tests {
     fn test_estimate_noise_spectrum_some() {
         // Use a low-variance signal to ensure a noise window is found
         let samples = vec![0.01; 2000];
-        let audio = MonoAudio { samples: samples.clone(), sample_rate: 1000 };
+        let audio = MonoAudio { samples: samples.clone(), sample_rate: 1000.0 };
         let spec = estimate_noise_spectrum(&audio);
         assert!(spec.is_some());
     }

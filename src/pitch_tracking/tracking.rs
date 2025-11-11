@@ -2,7 +2,7 @@
 //! This module provides functionality for tracking pitch in audio streams using a specified pitch detector.
 
 use crate::audio::{IterableAudio, MonoAudioSource};
-use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
+use crate::pitch_tracking::detection::MonoPitchDetector;
 
 /// Configuration for pitch tracking
 #[derive(Clone, Copy)]
@@ -59,7 +59,7 @@ mod tests {
 
     #[test]
     fn test_pitch_tracker_fixed_pitch() {
-        let audio = MonoAudio { samples: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], sample_rate: 44100 };
+        let audio = MonoAudio { samples: vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0], sample_rate: 44100.0 };
         let mut tracker = PitchTracker::new(DummyDetector, 2, 2);
         let pitches = tracker.pitches(audio);
         // With window_size=2, step_size=2, expect 3 windows
@@ -77,7 +77,7 @@ mod tests {
 
     #[test]
     fn test_pitch_tracker_none_pitch() {
-        let audio = MonoAudio { samples: vec![1.0, 2.0, 3.0, 4.0], sample_rate: 44100 };
+        let audio = MonoAudio { samples: vec![1.0, 2.0, 3.0, 4.0], sample_rate: 44100.0 };
         let mut tracker = PitchTracker::new(NoneDetector, 2, 1);
         let pitches = tracker.pitches(audio);
         // With window_size=2, step_size=1, expect 3 windows
