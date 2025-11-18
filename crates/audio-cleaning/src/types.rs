@@ -1,5 +1,11 @@
 use rustfft::num_complex::Complex;
 use rustfft::{FftPlanner, FftDirection};
+use std::cell::RefCell;
+
+thread_local! {
+    static FFT_PLANNER_CACHE: RefCell<FftPlanner<f32>> = 
+        RefCell::new(FftPlanner::new());
+}
 
 /// Struct representing a computed spectrum, with ability to invert (IFFT) back to time domain
 pub struct Spectrum {
@@ -10,7 +16,6 @@ pub struct Spectrum {
 impl Spectrum {
     /// Compute the full spectrum of a real-valued signal (returns Spectrum struct)
     pub fn from_waveform(signal: &[f32]) -> Self {
-        // FIXME save the planner for reuse
         let n_fft = signal.len();
         let spectrum = compute_spectrum(signal, n_fft);
         Self { complex: spectrum, n: n_fft }
@@ -23,11 +28,13 @@ impl Spectrum {
 
     /// Invert the spectrum back to the time domain (real part only)
     pub fn to_time_domain(&self) -> Vec<f32> {
-        let mut buffer = self.complex.clone();
-        let mut planner = FftPlanner::<f32>::new();
-        let ifft = planner.plan_fft(self.n, FftDirection::Inverse);
-        ifft.process(&mut buffer);
-        buffer.iter().map(|c| c.re / self.n as f32).collect()
+        FFT_PLANNER_CACHE.with(|cache| {
+            let mut buffer = self.complex.clone();
+            let mut planner = cache.borrow_mut();
+            let ifft = planner.plan_fft(self.n, FftDirection::Inverse);
+            ifft.process(&mut buffer);
+            buffer.iter().map(|c| c.re / self.n as f32).collect()
+        })
     }
 
     // Get the complex value at index i
@@ -37,11 +44,13 @@ impl Spectrum {
 }
 
 fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
-    let mut planner = FftPlanner::<f32>::new();
-    let fft = planner.plan_fft_forward(n_fft);
-    let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
-    fft.process(&mut buffer);
-    buffer
+    FFT_PLANNER_CACHE.with(|cache| {
+        let mut planner = cache.borrow_mut();
+        let fft = planner.plan_fft_forward(n_fft);
+        let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
+        fft.process(&mut buffer);
+        buffer
+    })
 }
 
 // TODO add frequency axis
@@ -108,7 +117,6 @@ impl Default for SpectrogramConfig {
     }
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -158,6 +166,37 @@ mod tests {
         assert_eq!(spec.n_time_steps(), 3);
         // Each spectrum should have window_size/2 bins
         assert_eq!(spec.n_freq_bins(), 2);
+    }
+
+    #[test]
+    fn test_fft_planner_reuse() {
+        // Test that multiple FFT operations work correctly (reusing the cached planner)
+        let signal1 = vec![1.0, 0.0, -1.0, 0.0];
+        let signal2 = vec![0.5, 1.0, 0.5, 0.0];
+
+        // First FFT operation
+        let spectrum1 = Spectrum::from_waveform(&signal1);
+        let recovered1 = spectrum1.to_time_domain();
+
+        // Second FFT operation (should reuse planner)
+        let spectrum2 = Spectrum::from_waveform(&signal2);
+        let recovered2 = spectrum2.to_time_domain();
+
+        // Verify both operations produce correct results
+        for (a, b) in recovered1.iter().zip(signal1.iter()) {
+            assert!((a - b).abs() < 1e-5);
+        }
+        for (a, b) in recovered2.iter().zip(signal2.iter()) {
+            assert!((a - b).abs() < 1e-5);
+        }
+
+        // Test with different sizes (ensures planner cache handles different sizes)
+        let signal3 = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
+        let spectrum3 = Spectrum::from_waveform(&signal3);
+        let recovered3 = spectrum3.to_time_domain();
+        for (a, b) in recovered3.iter().zip(signal3.iter()) {
+            assert!((a - b).abs() < 1e-5);
+        }
     }
 }
 
