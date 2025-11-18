@@ -31,16 +31,15 @@ impl std::error::Error for AudioIoError {}
 
 /// Load mono audio from a WAV file
 ///
-/// This function reads a WAV file and converts it to mono audio.
-/// If the file contains stereo or multi-channel audio, it will be
-/// mixed down to mono by averaging the channels.
+/// This function reads a WAV file containing mono audio.
+/// If the file contains stereo or multi-channel audio, an error will be returned.
 ///
 /// # Arguments
 /// * `path` - Path to the WAV file to load
 ///
 /// # Returns
 /// * `Ok(MonoAudio)` - Successfully loaded audio
-/// * `Err(AudioIoError)` - Error reading the file
+/// * `Err(AudioIoError)` - Error reading the file or if the file is not mono
 ///
 /// # Examples
 /// ```no_run
@@ -58,6 +57,13 @@ pub fn load_wav<P: AsRef<Path>>(path: P) -> Result<MonoAudio, AudioIoError> {
     let spec = reader.spec();
     let sample_rate = spec.sample_rate;
     let channels = spec.channels as usize;
+    
+    // Only mono audio is supported
+    if channels != 1 {
+        return Err(AudioIoError::UnsupportedFormat(
+            format!("Only mono audio is supported, found {} channels", channels)
+        ));
+    }
     
     // Read all samples based on the sample format
     let samples: Vec<f32> = match (spec.sample_format, spec.bits_per_sample) {
@@ -91,17 +97,7 @@ pub fn load_wav<P: AsRef<Path>>(path: P) -> Result<MonoAudio, AudioIoError> {
         }
     };
     
-    // Convert to mono if needed
-    let mono_samples = if channels == 1 {
-        samples
-    } else {
-        // Mix down to mono by averaging channels
-        samples.chunks(channels)
-            .map(|chunk| chunk.iter().sum::<f32>() / channels as f32)
-            .collect()
-    };
-    
-    Ok(MonoAudio::new(mono_samples, sample_rate))
+    Ok(MonoAudio::new(samples, sample_rate))
 }
 
 /// Save mono audio to a WAV file
@@ -225,6 +221,44 @@ mod tests {
             assert_eq!(loaded.sample_rate, rate, "Sample rate not preserved for {} Hz", rate);
         }
         
+        fs::remove_file(test_path).ok();
+    }
+    
+    #[test]
+    fn test_load_stereo_file_returns_error() {
+        let test_path = "/tmp/test_stereo.wav";
+        
+        // Create a stereo WAV file manually using hound
+        let spec = hound::WavSpec {
+            channels: 2,
+            sample_rate: 44100,
+            bits_per_sample: 32,
+            sample_format: hound::SampleFormat::Float,
+        };
+        
+        let mut writer = hound::WavWriter::create(test_path, spec).unwrap();
+        // Write some stereo samples (left, right, left, right, ...)
+        for i in 0..10 {
+            writer.write_sample((i as f32) * 0.1).unwrap(); // Left channel
+            writer.write_sample((i as f32) * -0.1).unwrap(); // Right channel
+        }
+        writer.finalize().unwrap();
+        
+        // Try to load the stereo file
+        let result = load_wav(test_path);
+        
+        // Should return an error
+        assert!(result.is_err(), "Should fail to load stereo file");
+        
+        match result {
+            Err(AudioIoError::UnsupportedFormat(msg)) => {
+                assert!(msg.contains("mono"), "Error message should mention mono");
+                assert!(msg.contains("2"), "Error message should mention 2 channels");
+            },
+            _ => panic!("Expected UnsupportedFormat error"),
+        }
+        
+        // Clean up
         fs::remove_file(test_path).ok();
     }
 }
