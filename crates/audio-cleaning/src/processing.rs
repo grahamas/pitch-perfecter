@@ -1,7 +1,8 @@
 //! # Signal Processing
 //! This module provides signal processing functionalities for audio data.
 //! It includes functionalities for cleaning audio signals, computing spectra, and spectrograms.
-//!
+//! 
+
 
 /// Find the index and value of the peak in a signal
 /// FIXME There must be a better way to do this (library function, or more robust)
@@ -35,13 +36,7 @@ mod tests {
         let spectrum = Spectrum::from_waveform(&signal);
         // The peak should be at bin k = freq * N / sample_rate
         let k = (freq * len as f32 / sample_rate).round() as usize;
-        let max_bin = spectrum
-            .magnitudes()
-            .iter()
-            .enumerate()
-            .max_by(|a, b| a.1.partial_cmp(b.1).unwrap())
-            .unwrap()
-            .0;
+        let max_bin = spectrum.magnitudes().iter().enumerate().max_by(|a, b| a.1.partial_cmp(b.1).unwrap()).unwrap().0;
         assert_eq!(k, max_bin);
     }
 

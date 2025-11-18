@@ -1,9 +1,9 @@
 use rustfft::num_complex::Complex;
-use rustfft::{FftDirection, FftPlanner};
+use rustfft::{FftPlanner, FftDirection};
 use std::cell::RefCell;
 
 thread_local! {
-    static FFT_PLANNER_CACHE: RefCell<FftPlanner<f32>> =
+    static FFT_PLANNER_CACHE: RefCell<FftPlanner<f32>> = 
         RefCell::new(FftPlanner::new());
 }
 
@@ -18,18 +18,12 @@ impl Spectrum {
     pub fn from_waveform(signal: &[f32]) -> Self {
         let n_fft = signal.len();
         let spectrum = compute_spectrum(signal, n_fft);
-        Self {
-            complex: spectrum,
-            n: n_fft,
-        }
+        Self { complex: spectrum, n: n_fft }
     }
 
     /// Get the magnitude spectrum (positive frequencies only)
     pub fn magnitudes(&self) -> Vec<f32> {
-        self.complex[..self.n / 2]
-            .iter()
-            .map(|c| c.norm())
-            .collect()
+        self.complex[..self.n/2].iter().map(|c| c.norm()).collect()
     }
 
     /// Invert the spectrum back to the time domain (real part only)
@@ -62,9 +56,10 @@ fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
 // TODO add frequency axis
 pub struct Spectrogram {
     pub spectra: Vec<Vec<f32>>, // Vec of spectra (each spectrum is Vec<f32>)
-    pub window_size: usize,     // Size of each FFT window
-    pub step_size: usize,       // Step size between windows
+    pub window_size: usize,      // Size of each FFT window
+    pub step_size: usize,        // Step size between windows
 }
+
 
 impl Spectrogram {
     pub fn from_waveform(signal: &[f32], config: SpectrogramConfig) -> Self {
@@ -98,10 +93,10 @@ fn compute_spectrogram(signal: &[f32], window_size: usize, step_size: usize) -> 
     let mut result = Vec::new();
     let mut i = 0;
     while i + window_size <= signal.len() {
-        let window = &signal[i..i + window_size];
+        let window = &signal[i..i+window_size];
         let spectrum = Spectrum::from_waveform(window).magnitudes();
         // Only keep the positive frequencies (first half of the spectrum)
-        let spectrum = spectrum[..window_size / 2].to_vec();
+        let spectrum = spectrum[..window_size/2].to_vec();
         result.push(spectrum);
         i += step_size;
     }
@@ -113,7 +108,7 @@ pub struct SpectrogramConfig {
     pub step_size: usize,   // Number of samples to step between windows
 }
 
-impl Default for SpectrogramConfig {
+impl Default for SpectrogramConfig { 
     fn default() -> Self {
         Self {
             window_size: 1024,
@@ -137,7 +132,7 @@ mod tests {
         let spectrum = Spectrum::from_waveform(&signal);
         assert_eq!(spectrum.complex.len(), n);
         let mags = spectrum.magnitudes();
-        assert_eq!(mags.len(), n / 2);
+        assert_eq!(mags.len(), n/2);
         // Magnitudes should be non-negative
         assert!(mags.iter().all(|&m| m >= 0.0));
     }
@@ -165,10 +160,7 @@ mod tests {
     #[test]
     fn test_spectrogram_from_waveform() {
         let signal = vec![1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0];
-        let config = SpectrogramConfig {
-            window_size: 4,
-            step_size: 2,
-        };
+        let config = SpectrogramConfig { window_size: 4, step_size: 2 };
         let spec = Spectrogram::from_waveform(&signal, config);
         // With window_size=4, step_size=2, expect 3 windows
         assert_eq!(spec.n_time_steps(), 3);
@@ -207,3 +199,4 @@ mod tests {
         }
     }
 }
+
