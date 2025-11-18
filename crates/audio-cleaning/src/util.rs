@@ -18,14 +18,17 @@ pub fn mean(data: &[f32]) -> Option<f32> {
 
 pub fn mean_std_deviation(data: &[f32]) -> Option<(f32, f32)> {
     let mean_value = mean(data)?;
-    let variance = data.iter().map(|&value| {
-        let diff = mean_value - value;
-        diff * diff
-    }).sum::<f32>() / data.len() as f32;
+    let variance = data
+        .iter()
+        .map(|&value| {
+            let diff = mean_value - value;
+            diff * diff
+        })
+        .sum::<f32>()
+        / data.len() as f32;
     let std_dev = variance.sqrt();
     Some((mean_value, std_dev))
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -39,7 +42,7 @@ mod tests {
     #[test]
     fn test_rms_known() {
         let sig = [3.0, 4.0];
-        let expected = ((3.0f32*3.0 + 4.0*4.0)/2.0).sqrt();
+        let expected = ((3.0f32 * 3.0 + 4.0 * 4.0) / 2.0).sqrt();
         assert!((rms(&sig).unwrap() - expected).abs() < 1e-6);
     }
 
