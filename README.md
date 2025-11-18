@@ -145,6 +145,11 @@ Run the pitch detection with cleaning example:
 cargo run --package playground --example pitch_detection_with_cleaning
 ```
 
+List available audio input devices:
+```bash
+cargo run --package playground --example list_audio_devices
+```
+
 Record audio from microphone and detect pitch:
 ```bash
 cargo run --package playground --example record_from_microphone
