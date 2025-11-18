@@ -21,24 +21,25 @@ pub const DEFAULT_VOCAL_HIGH_HZ: f32 = 1200.0;
 /// This removes both low-frequency rumble and high-frequency noise that can
 /// interfere with pitch detection.
 /// 
-/// FIXME This function currently does not use the sample rate parameter,
-/// Obviously it needs the sample rate to properly calculate the filter coefficients.
+/// The sample rate is explicitly set on the filter to ensure correct frequency
+/// response regardless of the input audio's sample rate.
 /// 
 /// # Arguments
 /// * `samples` - Input audio samples
-/// * `_sample_rate` - Sample rate (currently unused but kept for API consistency)
+/// * `sample_rate` - Sample rate of the audio in Hz
 /// * `low_hz` - Low cutoff frequency in Hz
 /// * `high_hz` - High cutoff frequency in Hz
 /// 
 /// # Returns
 /// Filtered audio samples with the same length as input
-pub fn bandpass_vocal_range(samples: &[f32], _sample_rate: f32, low_hz: f32, high_hz: f32) -> Vec<f32> {
+pub fn bandpass_vocal_range(samples: &[f32], sample_rate: f32, low_hz: f32, high_hz: f32) -> Vec<f32> {
     let mut filtered = Vec::with_capacity(samples.len());
     let center = (low_hz + high_hz) * 0.5;
     let bandwidth = high_hz - low_hz;
     let q = if bandwidth > 0.0 { center / bandwidth } else { 1.0 };
     
     let mut filter = bandpass_hz(center, q);
+    filter.set_sample_rate(sample_rate as f64);
     
     for &sample in samples {
         filtered.push(filter.filter_mono(sample));
@@ -244,5 +245,59 @@ mod tests {
         let audio = MonoAudio { samples: samples.clone(), sample_rate: 1000 };
         let spec = estimate_noise_spectrum(&audio);
         assert!(spec.is_some());
+    }
+
+    #[test]
+    fn test_bandpass_vocal_range_uses_sample_rate() {
+        // This test verifies that the sample_rate parameter is actually used by the filter.
+        // We test the counterfactual: filtering with the WRONG sample rate should give different results.
+        
+        // Generate a 440 Hz sine wave sampled at 48 kHz
+        let actual_sample_rate = 48000.0;
+        let frequency = 440.0; // Hz - center of the passband (80-1200 Hz)
+        let duration = 0.5; // seconds - longer duration for filter to settle
+        let num_samples = (actual_sample_rate * duration) as usize;
+        
+        let samples: Vec<f32> = (0..num_samples)
+            .map(|i| {
+                let t = i as f32 / actual_sample_rate;
+                (2.0 * std::f32::consts::PI * frequency * t).sin()
+            })
+            .collect();
+        
+        // Filter with the CORRECT sample rate (48 kHz)
+        let filtered_correct = bandpass_vocal_range(&samples, actual_sample_rate, 80.0, 1200.0);
+        
+        // Filter with the WRONG sample rate (44.1 kHz)
+        // If sample_rate parameter is ignored, this would produce the same result
+        let wrong_sample_rate = 44100.0;
+        let filtered_wrong = bandpass_vocal_range(&samples, wrong_sample_rate, 80.0, 1200.0);
+        
+        // Calculate energy for both filtered signals (skip first 10% to avoid transients)
+        let skip = num_samples / 10;
+        let energy_correct: f32 = filtered_correct[skip..].iter().map(|x| x * x).sum::<f32>() / (filtered_correct.len() - skip) as f32;
+        let energy_wrong: f32 = filtered_wrong[skip..].iter().map(|x| x * x).sum::<f32>() / (filtered_wrong.len() - skip) as f32;
+        
+        // The results should be DIFFERENT when using different sample rates
+        // The difference should be significant (at least 5% relative difference)
+        let relative_diff = (energy_correct - energy_wrong).abs() / energy_correct.max(energy_wrong);
+        
+        assert!(
+            relative_diff > 0.05,
+            "Filter output should differ significantly when using wrong sample rate. \
+             Energy with correct rate (48kHz): {}, with wrong rate (44.1kHz): {}, \
+             relative difference: {:.2}%",
+            energy_correct,
+            energy_wrong,
+            relative_diff * 100.0
+        );
+        
+        // Additionally, verify that 440 Hz is within the passband (80-1200 Hz) at the correct sample rate
+        // so it should have reasonable energy (not heavily attenuated)
+        assert!(
+            energy_correct > 0.05,
+            "440 Hz signal should pass through filter with correct sample rate with reasonable energy, got: {}",
+            energy_correct
+        );
     }
 }
