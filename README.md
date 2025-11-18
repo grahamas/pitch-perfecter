@@ -27,11 +27,12 @@ Low-level audio types and utilities shared across all modules.
 
 **Features:**
 - Core audio data types (`MonoAudio`, `Audio` trait)
+- Audio file I/O (loading and saving WAV files)
 - Sample format conversions
 - Time ↔ samples conversion helpers
 - Audio windowing and iteration
 
-**Dependencies:** None (base crate)
+**Dependencies:** `hound` (for WAV file I/O)
 
 ### audio-cleaning
 
@@ -131,6 +132,11 @@ cargo test -p pitch-detection-utils
 ```
 
 ## Examples
+
+Demonstrate audio file loading and saving:
+```bash
+cargo run --package playground --example audio_file_io_demo
+```
 
 Run the pitch detection with cleaning example:
 ```bash
