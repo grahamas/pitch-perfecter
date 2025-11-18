@@ -3,8 +3,16 @@ name = "gui"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "pitch-perfecter-gui"
+path = "src/main.rs"
+
 [dependencies]
 learning-tools = { path = "../learning-tools" }
 audio-utils = { path = "../audio-utils" }
 audio-cleaning = { path = "../audio-cleaning" }
 pitch-detection-utils = { path = "../pitch-detection" }
+eframe = "0.30"
+egui = "0.30"
+cpal = "0.15"
+hound = "3.5"
