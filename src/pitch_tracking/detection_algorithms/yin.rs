@@ -1,7 +1,7 @@
 use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
-use crate::audio::{MonoAudioSource, Audio};
+use crate::audio::MonoAudioSource;
 
 
 pub struct ExternalYinDetector {

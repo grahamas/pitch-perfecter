@@ -1,4 +1,3 @@
-use egui::Window;
 use pitch_perfecter::audio::types::MonoAudio;
 use pitch_perfecter::pitch_tracking::detection_algorithms::yin::ExternalYinDetector;
 use pitch_perfecter::pitch_tracking::detection::MonoPitchDetector;

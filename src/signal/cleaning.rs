@@ -34,14 +34,14 @@ pub const DEFAULT_VOCAL_HIGH_HZ: f32 = 1200.0;
 /// Filtered audio samples with the same length as input
 pub fn bandpass_vocal_range(samples: &[f32], _sample_rate: f32, low_hz: f32, high_hz: f32) -> Vec<f32> {
     let mut filtered = Vec::with_capacity(samples.len());
-    let center = (low_hz + high_hz) as f64 * 0.5;
-    let bandwidth = (high_hz - low_hz) as f64;
+    let center = (low_hz + high_hz) * 0.5;
+    let bandwidth = high_hz - low_hz;
     let q = if bandwidth > 0.0 { center / bandwidth } else { 1.0 };
     
     let mut filter = bandpass_hz(center, q);
     
     for &sample in samples {
-        filtered.push(filter.filter_mono(sample as f64) as f32);
+        filtered.push(filter.filter_mono(sample));
     }
     
     filtered
