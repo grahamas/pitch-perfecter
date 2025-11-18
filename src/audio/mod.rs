@@ -19,7 +19,7 @@
 //! # Examples
 //! 
 //! ```
-//! use pitch_perfecter::audio::{MonoAudio, MonoAudioSource};
+//! use pitch_perfecter::audio::{Audio, MonoAudio, MonoAudioSource};
 //! 
 //! // Create a simple mono audio buffer
 //! let samples = vec![0.0, 0.5, 1.0, 0.5, 0.0];
