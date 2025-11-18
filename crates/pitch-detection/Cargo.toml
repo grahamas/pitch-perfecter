@@ -1,0 +1,8 @@
+[package]
+name = "pitch-detection-utils"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+audio-utils = { path = "../audio-utils" }
+pitch-detection = "0.3.0"

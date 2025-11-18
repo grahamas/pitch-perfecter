@@ -1,0 +1,9 @@
+[package]
+name = "audio-cleaning"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+audio-utils = { path = "../audio-utils" }
+fundsp = "0.20.0"
+rustfft = "6.1"
