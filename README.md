@@ -28,11 +28,13 @@ Low-level audio types and utilities shared across all modules.
 **Features:**
 - Core audio data types (`MonoAudio`, `Audio` trait)
 - Audio file I/O (loading and saving WAV files)
+- Microphone recording (record from default input device)
+- List available audio input devices
 - Sample format conversions
 - Time ↔ samples conversion helpers
 - Audio windowing and iteration
 
-**Dependencies:** `hound` (for WAV file I/O)
+**Dependencies:** `hound` (for WAV file I/O), `cpal` (for audio input)
 
 ### audio-cleaning
 
@@ -141,6 +143,11 @@ cargo run --package playground --example audio_file_io_demo
 Run the pitch detection with cleaning example:
 ```bash
 cargo run --package playground --example pitch_detection_with_cleaning
+```
+
+Record audio from microphone and detect pitch:
+```bash
+cargo run --package playground --example record_from_microphone
 ```
 
 Generate a voice-like test signal:
