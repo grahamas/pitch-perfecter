@@ -3,7 +3,6 @@
 //! It includes functionalities for cleaning audio signals, computing spectra, and spectrograms.
 //! 
 
-use super::types::{Spectrum, Spectrogram};
 
 /// Find the index and value of the peak in a signal
 /// FIXME There must be a better way to do this (library function, or more robust)

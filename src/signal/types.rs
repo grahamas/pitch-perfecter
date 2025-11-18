@@ -41,7 +41,7 @@ fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
     let fft = planner.plan_fft_forward(n_fft);
     let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
     fft.process(&mut buffer);
-    return buffer;
+    buffer
 }
 
 // TODO add frequency axis

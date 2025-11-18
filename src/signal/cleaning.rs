@@ -171,10 +171,10 @@ fn get_noise_window(samples: &[f32], sample_rate: f32) -> Option<&[f32]> {
 
     let noise_window_zscore = (noise_window_rms - rms_mean) / rms_stddev;
     if noise_window_zscore < -1.0 {
-        return Some(noise_window);
+        Some(noise_window)
     } else {
         eprintln!("No suitable noise window found based on RMS and Z-score criteria.");
-        return None;
+        None
     }
 
 }

@@ -35,16 +35,7 @@ pub fn voice_like_signal(
             signal[i] += amp * (2.0 * PI * freq * t).sin();
         }
     }
-    // Apply a simple amplitude envelope (attack/release)
-    let attack = (0.05 * len as f32) as usize;
-    let release = (0.1 * len as f32) as usize;
-    for i in 0..attack {
-        signal[i] *= i as f32 / attack as f32;
-    }
-    for i in (len - release)..len {
-        signal[i] *= (len - i) as f32 / release as f32;
-    }
-    signal
+    apply_envelope(signal, len)
 }
 
 /// Generate a voice-like signal with a single pitch (no vibrato, with harmonics and envelope)
@@ -57,20 +48,26 @@ pub fn voice_like_single_pitch(
     let mut signal = vec![0.0; len];
     for h in 1..=harmonics {
         let amp = 1.0 / h as f32; // Decreasing amplitude for higher harmonics
-        for i in 0..len {
+        for (i, val) in signal.iter_mut().enumerate().take(len) {
             let t = i as f32 / sample_rate;
             let freq = base_freq * h as f32;
-            signal[i] += amp * (2.0 * std::f32::consts::PI * freq * t).sin();
+            *val += amp * (2.0 * std::f32::consts::PI * freq * t).sin();
         }
     }
+    apply_envelope(signal, len)
+}
+
+fn apply_envelope(mut signal: Vec<f32>, len: usize) -> Vec<f32> {
     // Apply a simple amplitude envelope (attack/release)
     let attack = (0.05 * len as f32) as usize;
     let release = (0.1 * len as f32) as usize;
-    for i in 0..attack {
-        signal[i] *= i as f32 / attack as f32;
+    for (i, val) in signal.iter_mut().enumerate().take(attack) {
+        *val *= i as f32 / attack as f32;
     }
-    for i in (len - release)..len {
-        signal[i] *= (len - i) as f32 / release as f32;
+    for (i, val) in signal.iter_mut().enumerate().take(len).skip((len - release)) {
+        *val *= (len - i) as f32 / release as f32;
     }
     signal
 }
+
+
