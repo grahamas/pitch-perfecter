@@ -21,24 +21,25 @@ pub const DEFAULT_VOCAL_HIGH_HZ: f32 = 1200.0;
 /// This removes both low-frequency rumble and high-frequency noise that can
 /// interfere with pitch detection.
 /// 
-/// FIXME This function currently does not use the sample rate parameter,
-/// Obviously it needs the sample rate to properly calculate the filter coefficients.
+/// The sample rate is explicitly set on the filter to ensure correct frequency
+/// response regardless of the input audio's sample rate.
 /// 
 /// # Arguments
 /// * `samples` - Input audio samples
-/// * `_sample_rate` - Sample rate (currently unused but kept for API consistency)
+/// * `sample_rate` - Sample rate of the audio in Hz
 /// * `low_hz` - Low cutoff frequency in Hz
 /// * `high_hz` - High cutoff frequency in Hz
 /// 
 /// # Returns
 /// Filtered audio samples with the same length as input
-pub fn bandpass_vocal_range(samples: &[f32], _sample_rate: f32, low_hz: f32, high_hz: f32) -> Vec<f32> {
+pub fn bandpass_vocal_range(samples: &[f32], sample_rate: f32, low_hz: f32, high_hz: f32) -> Vec<f32> {
     let mut filtered = Vec::with_capacity(samples.len());
     let center = (low_hz + high_hz) * 0.5;
     let bandwidth = high_hz - low_hz;
     let q = if bandwidth > 0.0 { center / bandwidth } else { 1.0 };
     
     let mut filter = bandpass_hz(center, q);
+    filter.set_sample_rate(sample_rate as f64);
     
     for &sample in samples {
         filtered.push(filter.filter_mono(sample));
@@ -244,5 +245,59 @@ mod tests {
         let audio = MonoAudio { samples: samples.clone(), sample_rate: 1000 };
         let spec = estimate_noise_spectrum(&audio);
         assert!(spec.is_some());
+    }
+
+    #[test]
+    fn test_bandpass_vocal_range_uses_sample_rate() {
+        // Generate a simple sine wave at 440 Hz (A4 note)
+        let sample_rate_44k = 44100.0;
+        let sample_rate_48k = 48000.0;
+        let frequency = 440.0; // Hz
+        let duration = 0.1; // seconds
+        
+        // Generate samples at 44.1 kHz
+        let samples_44k: Vec<f32> = (0..(sample_rate_44k * duration) as usize)
+            .map(|i| {
+                let t = i as f32 / sample_rate_44k;
+                (2.0 * std::f32::consts::PI * frequency * t).sin()
+            })
+            .collect();
+        
+        // Generate samples at 48 kHz (same frequency, different sample rate)
+        let samples_48k: Vec<f32> = (0..(sample_rate_48k * duration) as usize)
+            .map(|i| {
+                let t = i as f32 / sample_rate_48k;
+                (2.0 * std::f32::consts::PI * frequency * t).sin()
+            })
+            .collect();
+        
+        // Filter with correct sample rates
+        let filtered_44k = bandpass_vocal_range(&samples_44k, sample_rate_44k, 80.0, 1200.0);
+        let filtered_48k = bandpass_vocal_range(&samples_48k, sample_rate_48k, 80.0, 1200.0);
+        
+        // Both should preserve the signal since 440 Hz is within the passband (80-1200 Hz)
+        // Check that the filtered signals have reasonable energy (not zeroed out)
+        let energy_44k: f32 = filtered_44k.iter().map(|x| x * x).sum::<f32>() / filtered_44k.len() as f32;
+        let energy_48k: f32 = filtered_48k.iter().map(|x| x * x).sum::<f32>() / filtered_48k.len() as f32;
+        
+        // Both should have significant energy since 440 Hz is in the passband
+        assert!(energy_44k > 0.1, "44.1kHz filtered signal should have energy > 0.1, got {}", energy_44k);
+        assert!(energy_48k > 0.1, "48kHz filtered signal should have energy > 0.1, got {}", energy_48k);
+        
+        // Test with a frequency outside the passband (e.g., 50 Hz - below the 80 Hz cutoff)
+        let low_freq = 50.0;
+        let samples_low: Vec<f32> = (0..(sample_rate_44k * duration) as usize)
+            .map(|i| {
+                let t = i as f32 / sample_rate_44k;
+                (2.0 * std::f32::consts::PI * low_freq * t).sin()
+            })
+            .collect();
+        
+        let filtered_low = bandpass_vocal_range(&samples_low, sample_rate_44k, 80.0, 1200.0);
+        let energy_low: f32 = filtered_low.iter().map(|x| x * x).sum::<f32>() / filtered_low.len() as f32;
+        
+        // Should be attenuated (much less energy than the in-band signal)
+        assert!(energy_low < energy_44k * 0.5, 
+            "50Hz signal should be attenuated compared to 440Hz: {} vs {}", energy_low, energy_44k);
     }
 }
