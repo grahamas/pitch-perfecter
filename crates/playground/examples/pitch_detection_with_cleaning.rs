@@ -1,6 +1,6 @@
 use audio_utils::MonoAudio;
 use pitch_detection_utils::{ExternalYinDetector, MonoPitchDetector};
-use playground::voice_like_single_pitch;
+use sound_synth::voice_like_single_pitch;
 use audio_cleaning::clean_audio_for_pitch;
 use rand::Rng;
 

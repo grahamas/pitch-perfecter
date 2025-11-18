@@ -13,6 +13,7 @@ pitch-perfecter/
     ├── audio-utils/        # Low-level audio types and utilities
     ├── audio-cleaning/     # Audio preprocessing and cleaning
     ├── pitch-detection/    # Pitch detection algorithms
+    ├── sound-synth/        # Sound generation for testing
     ├── learning-tools/     # Learning logic and exercises (placeholder)
     ├── gui/               # Graphical user interface (placeholder)
     └── playground/        # Examples, demos, and integration tests
@@ -56,6 +57,18 @@ Pitch detection algorithms and musical note utilities.
 
 **Dependencies:** `audio-utils`, `pitch-detection` (external crate)
 
+### sound-synth
+
+Sound generation utilities for testing and demonstration.
+
+**Features:**
+- Voice-like signal generation with harmonics
+- Vibrato sine wave synthesis
+- Amplitude envelope application
+- Test signal generation
+
+**Dependencies:** `audio-utils`
+
 ### learning-tools
 
 Sight-singing learning logic and exercises (placeholder for future development).
@@ -85,12 +98,11 @@ Graphical user interface (placeholder for future development).
 Examples, demos, and integration tests.
 
 **Features:**
-- Voice synthesis utilities for testing
 - Demo applications
 - Integration examples
 - Binary tools (e.g., `gen_voice_like`)
 
-**Dependencies:** All other workspace crates
+**Dependencies:** All other workspace crates (including `sound-synth` for test signal generation)
 
 ## Building
 
@@ -138,7 +150,8 @@ The crates follow a clean dependency hierarchy:
 audio-utils (base, no dependencies)
     ↑
     ├── audio-cleaning
-    └── pitch-detection-utils
+    ├── pitch-detection-utils
+    └── sound-synth
             ↑
             └── learning-tools
                     ↑
@@ -160,7 +173,8 @@ When adding new features:
 1. **Audio utilities** → Add to `audio-utils` if it's generic and reusable
 2. **Cleaning/preprocessing** → Add to `audio-cleaning`
 3. **Pitch detection** → Add to `pitch-detection-utils`
-4. **Learning features** → Add to `learning-tools`
+4. **Sound generation** → Add to `sound-synth` for test signals and synthesis
+5. **Learning features** → Add to `learning-tools`
 5. **UI components** → Add to `gui`
 6. **Examples/demos** → Add to `playground`
 

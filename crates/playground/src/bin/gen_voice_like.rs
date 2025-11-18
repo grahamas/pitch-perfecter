@@ -1,4 +1,4 @@
-use playground::voice_synth::voice_like_single_pitch;
+use sound_synth::voice_like_single_pitch;
 use hound::{WavWriter, WavSpec, SampleFormat};
 
 fn main() {

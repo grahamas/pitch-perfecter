@@ -11,6 +11,7 @@ path = "src/bin/gen_voice_like.rs"
 audio-utils = { path = "../audio-utils" }
 audio-cleaning = { path = "../audio-cleaning" }
 pitch-detection-utils = { path = "../pitch-detection" }
+sound-synth = { path = "../sound-synth" }
 learning-tools = { path = "../learning-tools" }
 hound = "3.5.1"
 rand = "0.9.2"

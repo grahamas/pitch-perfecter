@@ -3,6 +3,7 @@ members = [
     "crates/audio-utils",
     "crates/audio-cleaning",
     "crates/pitch-detection",
+    "crates/sound-synth",
     "crates/learning-tools",
     "crates/gui",
     "crates/playground",
