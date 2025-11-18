@@ -41,7 +41,7 @@ fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
     let fft = planner.plan_fft_forward(n_fft);
     let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
     fft.process(&mut buffer);
-    return buffer;
+    buffer
 }
 
 // TODO add frequency axis
@@ -78,6 +78,7 @@ impl Spectrogram {
 /// Compute the spectrogram of a real-valued signal
 /// - window_size: number of samples per FFT window
 /// - step_size: number of samples to step between windows
+///
 /// Returns: Vec of spectra (each spectrum is Vec<f32>)
 fn compute_spectrogram(signal: &[f32], window_size: usize, step_size: usize) -> Vec<Vec<f32>> {
     let mut result = Vec::new();
@@ -98,8 +99,8 @@ pub struct SpectrogramConfig {
     pub step_size: usize,   // Number of samples to step between windows
 }
 
-impl SpectrogramConfig { 
-    pub fn default() -> Self {
+impl Default for SpectrogramConfig { 
+    fn default() -> Self {
         Self {
             window_size: 1024,
             step_size: 256,

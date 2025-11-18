@@ -1,7 +1,7 @@
 use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
-use crate::audio::{MonoAudioSource, Audio};
+use crate::audio::MonoAudioSource;
 
 
 pub struct ExternalYinDetector {
@@ -27,8 +27,8 @@ impl MonoPitchDetector for ExternalYinDetector {
     fn get_mono_pitch<T: MonoAudioSource>(&mut self, mono_audio: T) -> Option<Pitch> {
         let sample_rate = mono_audio.sample_rate();
         let signal = mono_audio.mono_samples();
-        let pitch = self.detector.get_pitch(&signal, sample_rate as usize, self.power_threshold, self.clarity_threshold);
-        pitch
+        
+        self.detector.get_pitch(signal, sample_rate as usize, self.power_threshold, self.clarity_threshold)
     }
 }
 

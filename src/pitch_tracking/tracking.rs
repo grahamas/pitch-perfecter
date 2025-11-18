@@ -2,7 +2,7 @@
 //! This module provides functionality for tracking pitch in audio streams using a specified pitch detector.
 
 use crate::audio::{IterableAudio, MonoAudioSource};
-use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
+use crate::pitch_tracking::detection::MonoPitchDetector;
 
 /// Configuration for pitch tracking
 #[derive(Clone, Copy)]

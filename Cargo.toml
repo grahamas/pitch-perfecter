@@ -4,22 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-bytemuck = "1.23.1"
-cpal = "0.16.0"
-eframe = { version = "0.31.1", features = ["wgpu"] }
-egui = "0.31.1"
-egui_plot = "0.31.0"
 hound = "3.5.1"
-rfd = "0.15.3"
-chrono = "0.4"
 rustfft = "6.1"
 plotters = "0.3.7"
-pyin = "1.2.0"
-ndarray = "0.16.1"
-pitch-detection = "0.3.0"
-sound_synth = { path = "../sound_synth" }
-fundsp = "0.16"
-colorous = "1"
-tempfile = "3.20.0"
-log = "0.4.27"
+# sound_synth = { path = "../sound_synth" }
 rand = "0.9.2"
+pitch-detection = "0.3.0"
+fundsp = "0.20.0"
