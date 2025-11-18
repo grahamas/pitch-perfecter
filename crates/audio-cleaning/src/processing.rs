@@ -17,7 +17,7 @@ pub fn find_peak(signal: &[f32]) -> Option<(usize, f32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::signal::Spectrum;
+    use crate::types::Spectrum;
     use std::f32::consts::PI;
 
     // Helper: generate a sine wave

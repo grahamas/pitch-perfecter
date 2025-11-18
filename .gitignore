@@ -3,3 +3,5 @@
 test_outputs
 pitch_perfecter.code-workspace
 .aider*
+*.wav
+Cargo.toml.bak

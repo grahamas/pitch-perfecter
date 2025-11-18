@@ -8,7 +8,7 @@
 use fundsp::hacker::*;
 use rustfft::num_complex::Complex32;
 use super::{Spectrum};
-use crate::audio;
+use audio_utils as audio;
 use super::util::{rms, mean_std_deviation};
 
 /// Default vocal frequency range for bandpass filtering
@@ -204,7 +204,7 @@ pub fn estimate_noise_spectrum(audio: &audio::MonoAudio) -> Option<Spectrum> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::MonoAudio;
+    use audio_utils::MonoAudio;
 
     #[test]
     fn test_bandpass_vocal_range_identity_for_dc() {

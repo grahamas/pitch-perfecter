@@ -1,0 +1,9 @@
+[package]
+name = "learning-tools"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+audio-utils = { path = "../audio-utils" }
+audio-cleaning = { path = "../audio-cleaning" }
+pitch-detection-utils = { path = "../pitch-detection" }

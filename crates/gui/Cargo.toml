@@ -1,0 +1,10 @@
+[package]
+name = "gui"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+learning-tools = { path = "../learning-tools" }
+audio-utils = { path = "../audio-utils" }
+audio-cleaning = { path = "../audio-cleaning" }
+pitch-detection-utils = { path = "../pitch-detection" }

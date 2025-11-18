@@ -1,7 +1,7 @@
 use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
-use crate::audio::MonoAudioSource;
+use audio_utils::MonoAudioSource;
 
 
 pub struct ExternalYinDetector {
@@ -35,7 +35,7 @@ impl MonoPitchDetector for ExternalYinDetector {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::MonoAudio;
+    use audio_utils::MonoAudio;
 
     #[test]
     fn test_external_yin_detector_sine_wave() {

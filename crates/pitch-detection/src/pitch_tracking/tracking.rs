@@ -1,10 +1,26 @@
 //! # Pitch Tracking Module
 //! This module provides functionality for tracking pitch in audio streams using a specified pitch detector.
 
-use crate::audio::{IterableAudio, MonoAudioSource};
+use audio_utils::{IterableAudio, MonoAudioSource};
 use crate::pitch_tracking::detection::MonoPitchDetector;
 
 /// Configuration for pitch tracking
+#[derive(Clone, Copy, Debug)]
+pub struct PitchTrackerConfig {
+    pub window_size: usize,
+    pub step_size: usize,
+}
+
+impl Default for PitchTrackerConfig {
+    fn default() -> Self {
+        Self {
+            window_size: 2048,
+            step_size: 1024,
+        }
+    }
+}
+
+/// Pitch tracker for detecting pitch over time in audio
 #[derive(Clone, Copy)]
 pub struct PitchTracker<D: MonoPitchDetector> {
     detector: D,
@@ -46,7 +62,7 @@ impl<D: MonoPitchDetector> PitchTracker<D> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::audio::MonoAudio;
+    use audio_utils::MonoAudio;
     use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
 
     // Dummy detector that always returns a fixed pitch
