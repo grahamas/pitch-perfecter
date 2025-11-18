@@ -5,5 +5,6 @@
 //! different audio processing modules.
 
 pub mod audio;
+pub mod io;
 
 pub use audio::{Audio, MonoAudio, MonoAudioSource, IterableAudio};

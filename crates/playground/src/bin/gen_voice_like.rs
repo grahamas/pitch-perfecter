@@ -1,5 +1,5 @@
 use sound_synth::voice_like_single_pitch;
-use hound::{WavWriter, WavSpec, SampleFormat};
+use audio_utils::{MonoAudio, io::save_wav};
 
 fn main() {
     let sample_rate = 44100.0;
@@ -11,16 +11,7 @@ fn main() {
     let harmonics = 8;
     let signal = voice_like_single_pitch(freq, harmonics, sample_rate, len);
 
-    let spec = WavSpec {
-        channels: 1,
-        sample_rate: sample_rate as u32,
-        bits_per_sample: 32,
-        sample_format: SampleFormat::Float,
-    };
-    let mut writer = WavWriter::create("voice_like_test.wav", spec).unwrap();
-    for s in signal {
-        writer.write_sample(s).unwrap();
-    }
-    writer.finalize().unwrap();
+    let audio = MonoAudio::new(signal, sample_rate as u32);
+    save_wav("voice_like_test.wav", &audio).expect("Failed to save audio file");
     println!("Wrote voice_like_test.wav");
 }
