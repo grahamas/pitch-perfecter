@@ -84,9 +84,148 @@ pub fn list_input_devices() -> Result<Vec<InputDevice>, RecordingError> {
     Ok(result)
 }
 
+/// A microphone recorder that can be started and stopped on demand.
+///
+/// This is the preferred API for interactive recording scenarios where the user
+/// controls when to start and stop recording (e.g., with keyboard shortcuts or buttons).
+///
+/// # Examples
+/// ```no_run
+/// use audio_utils::recording::MicrophoneRecorder;
+///
+/// // Create and start recording
+/// let mut recorder = MicrophoneRecorder::new().expect("Failed to create recorder");
+/// recorder.start().expect("Failed to start recording");
+///
+/// // ... user interaction (e.g., wait for key press) ...
+///
+/// // Stop and get the recorded audio
+/// let audio = recorder.stop().expect("Failed to stop recording");
+/// println!("Recorded {} samples at {} Hz", audio.samples.len(), audio.sample_rate);
+/// ```
+pub struct MicrophoneRecorder {
+    samples: Arc<Mutex<Vec<f32>>>,
+    sample_rate: u32,
+    stream: Option<cpal::Stream>,
+}
+
+impl MicrophoneRecorder {
+    /// Create a new microphone recorder using the default input device.
+    ///
+    /// The recorder is created in a stopped state. Call `start()` to begin recording.
+    ///
+    /// # Returns
+    /// * `Ok(MicrophoneRecorder)` - Successfully created recorder
+    /// * `Err(RecordingError)` - Error setting up the recorder
+    pub fn new() -> Result<Self, RecordingError> {
+        let host = cpal::default_host();
+        
+        let device = host.default_input_device()
+            .ok_or_else(|| RecordingError::NoInputDevice("No default input device found".to_string()))?;
+        
+        let config = device.default_input_config()
+            .map_err(|e| RecordingError::DeviceConfigError(format!("Failed to get default config: {}", e)))?;
+        
+        let sample_rate = config.sample_rate().0;
+        let channels = config.channels() as usize;
+        
+        let samples = Arc::new(Mutex::new(Vec::new()));
+        let samples_clone = Arc::clone(&samples);
+        
+        // Build the input stream based on the sample format
+        let stream = match config.sample_format() {
+            cpal::SampleFormat::F32 => {
+                build_input_stream_f32(&device, &config.into(), samples_clone, channels)
+            },
+            cpal::SampleFormat::I16 => {
+                build_input_stream_i16(&device, &config.into(), samples_clone, channels)
+            },
+            cpal::SampleFormat::U16 => {
+                build_input_stream_u16(&device, &config.into(), samples_clone, channels)
+            },
+            sample_format => {
+                return Err(RecordingError::UnsupportedConfig(
+                    format!("Unsupported sample format: {:?}", sample_format)
+                ));
+            }
+        }?;
+        
+        Ok(MicrophoneRecorder {
+            samples,
+            sample_rate,
+            stream: Some(stream),
+        })
+    }
+    
+    /// Start recording audio from the microphone.
+    ///
+    /// If recording is already in progress, this does nothing.
+    ///
+    /// # Returns
+    /// * `Ok(())` - Successfully started recording
+    /// * `Err(RecordingError)` - Error starting the stream
+    pub fn start(&mut self) -> Result<(), RecordingError> {
+        if let Some(stream) = &self.stream {
+            stream.play()
+                .map_err(|e| RecordingError::StreamError(format!("Failed to start stream: {}", e)))?;
+        }
+        Ok(())
+    }
+    
+    /// Stop recording and return the recorded audio.
+    ///
+    /// This consumes the recorder and returns all audio recorded since `start()` was called.
+    /// The stream is automatically stopped and cleaned up.
+    ///
+    /// # Returns
+    /// * `Ok(MonoAudio)` - Successfully recorded audio
+    /// * `Err(RecordingError)` - Error stopping or retrieving the audio
+    pub fn stop(mut self) -> Result<MonoAudio, RecordingError> {
+        // Drop the stream to stop recording
+        self.stream.take();
+        
+        // Extract samples
+        let recorded_samples = self.samples.lock()
+            .map_err(|e| RecordingError::RecordError(format!("Failed to lock samples: {}", e)))?
+            .clone();
+        
+        if recorded_samples.is_empty() {
+            return Err(RecordingError::RecordError("No samples recorded".to_string()));
+        }
+        
+        Ok(MonoAudio::new(recorded_samples, self.sample_rate))
+    }
+    
+    /// Pause recording without stopping the stream.
+    ///
+    /// Audio data will not be captured while paused. Call `start()` to resume.
+    ///
+    /// # Returns
+    /// * `Ok(())` - Successfully paused recording
+    /// * `Err(RecordingError)` - Error pausing the stream
+    pub fn pause(&mut self) -> Result<(), RecordingError> {
+        if let Some(stream) = &self.stream {
+            stream.pause()
+                .map_err(|e| RecordingError::StreamError(format!("Failed to pause stream: {}", e)))?;
+        }
+        Ok(())
+    }
+    
+    /// Check if the recorder is currently recording.
+    ///
+    /// Note: This returns `true` if the stream exists and was started, but may not
+    /// perfectly reflect the actual hardware state.
+    pub fn is_recording(&self) -> bool {
+        self.stream.is_some()
+    }
+}
+
 /// Record audio from the default input device for a specified duration
 ///
-/// This function records mono audio from the system's default microphone.
+/// This is a convenience function for simple use cases where you want to record
+/// a fixed duration of audio. For interactive recording (start/stop on demand),
+/// use `MicrophoneRecorder` instead.
+///
 /// The audio is automatically converted to mono if the input is stereo or multi-channel.
 ///
 /// # Arguments
@@ -307,5 +446,36 @@ mod tests {
                 panic!("Failed to record: {}", e);
             }
         }
+    }
+    
+    #[test]
+    #[ignore] // Ignore by default as it requires a microphone
+    fn test_microphone_recorder_toggle() {
+        // Create recorder
+        let mut recorder = MicrophoneRecorder::new().expect("Failed to create recorder");
+        
+        // Start recording
+        recorder.start().expect("Failed to start recording");
+        
+        // Record for 1 second
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        
+        // Stop and get audio
+        let audio = recorder.stop().expect("Failed to stop recording");
+        
+        println!("Recorded {} samples at {} Hz", audio.samples.len(), audio.sample_rate);
+        assert!(!audio.samples.is_empty(), "Should have recorded samples");
+        assert!(audio.sample_rate > 0, "Sample rate should be positive");
+        
+        // Check that we got roughly the right number of samples
+        let expected_samples = audio.sample_rate as usize;
+        let tolerance = expected_samples / 10; // 10% tolerance
+        assert!(
+            audio.samples.len() >= expected_samples - tolerance &&
+            audio.samples.len() <= expected_samples + tolerance,
+            "Sample count {} should be close to {}",
+            audio.samples.len(),
+            expected_samples
+        );
     }
 }
