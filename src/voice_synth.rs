@@ -29,10 +29,10 @@ pub fn voice_like_signal(
     let mut signal = vec![0.0; len];
     for h in 1..=harmonics {
         let amp = 1.0 / h as f32; // Decreasing amplitude for higher harmonics
-        for i in 0..len {
+        for (i, val) in signal.iter_mut().enumerate().take(len) {
             let t = i as f32 / sample_rate;
             let freq = base_freq * h as f32 + vibrato_depth * (2.0 * PI * vibrato_freq * t).sin();
-            signal[i] += amp * (2.0 * PI * freq * t).sin();
+            *val += amp * (2.0 * PI * freq * t).sin();
         }
     }
     apply_envelope(signal, len)
