@@ -6,5 +6,6 @@
 
 pub mod audio;
 pub mod io;
+pub mod recording;
 
 pub use audio::{Audio, MonoAudio, MonoAudioSource, IterableAudio};
