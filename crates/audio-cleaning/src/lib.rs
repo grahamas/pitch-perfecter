@@ -12,6 +12,7 @@ mod util;
 pub mod types;
 pub mod cleaning;
 pub mod processing;
+pub mod spectral_gating;
 
 pub use types::{Spectrum, Spectrogram, SpectrogramConfig};
 pub use cleaning::{
@@ -19,3 +20,4 @@ pub use cleaning::{
     estimate_noise_spectrum, DEFAULT_VOCAL_LOW_HZ, DEFAULT_VOCAL_HIGH_HZ,
 };
 pub use processing::find_peak;
+pub use spectral_gating::{SpectralGate, SpectralGateConfig, apply_spectral_gating};

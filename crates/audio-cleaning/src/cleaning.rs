@@ -6,10 +6,10 @@
 //! - Background noise spectrum estimation
 
 use fundsp::hacker::*;
-use rustfft::num_complex::Complex32;
 use super::{Spectrum};
 use audio_utils as audio;
 use super::util::{rms, mean_std_deviation};
+use crate::spectral_gating;
 
 /// Default vocal frequency range for bandpass filtering
 pub const DEFAULT_VOCAL_LOW_HZ: f32 = 80.0;
@@ -120,24 +120,8 @@ fn apply_spectral_gating(
     noise_spec: Spectrum, 
     noise_threshold: Option<f32>
 ) -> Vec<f32> {
-    let threshold_multiplier = noise_threshold.unwrap_or(1.2);
-    
-    // Transform to frequency domain
-    let mut spectrum = Spectrum::from_waveform(samples);
-    // Apply spectral gating to each frequency bin
-    for (i, complex_sample) in spectrum.complex.iter_mut().enumerate() {
-        let noise_level = noise_spec.complex
-            .get(i)
-            .map(|c| c.norm())
-            .unwrap_or(0.0);
-            
-        if complex_sample.norm() < noise_level * threshold_multiplier {
-            *complex_sample = Complex32::new(0.0, 0.0);
-        }
-    }
-    
-    // Transform back to time domain and trim to original length
-    spectrum.to_time_domain()[..samples.len()].to_vec()
+    // Delegate to the spectral_gating module
+    spectral_gating::apply_spectral_gating(samples, noise_spec, noise_threshold)
 }
 
 /// Finds a suitable noise window in the audio samples
