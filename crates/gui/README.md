@@ -1,123 +1,201 @@
-# GUI Crate
+# Pitch Perfecter GUI
 
-This crate provides a graphical user interface for the Pitch Perfecter application using the egui framework.
+A real-time pitch detection GUI application with low-latency audio processing.
 
-## Features
-
-- **Real-time Audio Recording**: Captures audio from your default input device (microphone)
-- **Live Pitch Detection**: Displays detected pitch frequency and musical note name in real-time
-- **Audio Cleaning Options**:
-  - Bandpass Filter: Isolates vocal frequency range (80-800 Hz)
-  - Spectral Gating: Reduces background noise (placeholder for future implementation)
-- **File Saving**: Optional real-time WAV file recording
-- **Responsive UI**: Designed for real-time performance with continuous updates
-
-## Running the Application
+## Quick Start
 
 ```bash
 cargo run -p gui --bin pitch-perfecter-gui
 ```
 
-Or from the repository root:
+**Usage**: Grant microphone access when prompted, click "⏺ Start Recording", and sing or play an instrument. The detected pitch will be displayed in real-time.
 
-```bash
-cd crates/gui
-cargo run --bin pitch-perfecter-gui
-```
+## Features
+
+- **Real-time Pitch Detection**: Displays pitch frequency, musical note name, and confidence
+- **Low Latency**: ~50ms end-to-end (capture → processing → display)
+- **Audio Cleaning**: Configurable bandpass filter for vocal range (80-800 Hz)
+- **WAV Recording**: Optional real-time file saving
+- **Cross-platform**: Works on Linux, macOS, and Windows
 
 ## Architecture
 
-### Components
-
-1. **Main App (`main.rs`)**: The egui application that manages UI state and coordinates between recording and processing
-2. **Audio Recorder (`audio_recorder.rs`)**: Handles audio input using cpal, manages the recording stream
-3. **Pitch Processor (`pitch_processor.rs`)**: Processes audio chunks and detects pitch using YIN algorithm
-
 ### Threading Model
 
-- **Audio Recording Thread**: Runs in cpal's audio callback, captures samples, performs pitch detection, and sends results to main thread
-- **Main Thread**: Runs the GUI, receives pitch results, and updates the display
+```
+Microphone → Audio Thread (cpal callback)
+                  ↓
+            Pitch Detection (YIN algorithm, thread-local)
+                  ↓
+            Channel (pitch results)
+                  ↓
+            Main Thread (GUI display)
+```
 
-This design ensures:
-- Lowest possible latency (~50ms total)
-- Audio processing happens immediately after capture
-- Main thread only handles UI rendering
-- Responsive UI updates
+**Key Design**: Pitch detection runs directly on the audio callback thread using thread-local storage. This avoids Send/Sync issues with the external `pitch-detection` crate's use of `Rc<RefCell<>>` while achieving minimal latency.
 
-### Data Flow
+### Components
+
+- **main.rs**: egui application managing UI state and display
+- **audio_recorder.rs**: cpal-based audio capture with thread-local pitch processing
+- **pitch_processor.rs**: Audio cleaning and pitch detection utilities
+
+### Performance
+
+- **Buffer size**: 4096 samples (~93ms at 44.1kHz)
+- **Detection window**: 2048 samples
+- **Total latency**: ~50ms (audio capture + processing + display)
+- **Processing location**: Audio callback thread (not main thread)
+
+## UI Layout
 
 ```
-Microphone → Audio Recording Thread → Pitch Detection (on audio thread)
-                                              ↓
-                                      Pitch Results (channel)
-                                              ↓
-                                         Main Thread
-                                              ↓
-                                        GUI Display
+┌────────────────────────────────┐
+│     Pitch Perfecter            │
+├────────────────────────────────┤
+│ Recording                      │
+│  [⏺ Start Recording]           │
+│  Status: Ready                 │
+├────────────────────────────────┤
+│ Cleaning Options               │
+│  ☑ Bandpass Filter             │
+│  ☐ Spectral Gating             │
+├────────────────────────────────┤
+│ Detected Pitch                 │
+│  Note: A4                      │
+│  Frequency: 440.00 Hz          │
+│  Clarity: ████████░░ 80%       │
+├────────────────────────────────┤
+│ Save Recording                 │
+│  ☐ Save to file in real-time  │
+│  Filename: [recording.wav]     │
+└────────────────────────────────┘
 ```
+
+### Controls
+
+**Recording**
+- Start/Stop button with status display
+- Automatically uses default system input device
+
+**Cleaning Options**
+- **Bandpass Filter**: Removes frequencies outside 80-800 Hz (recommended for vocals)
+- **Spectral Gating**: Placeholder for noise reduction (requires noise profile)
+
+**Pitch Display**
+- **Note**: Musical note in scientific notation (e.g., A4, C#5)
+- **Frequency**: Hz value with 2 decimal precision
+- **Clarity**: Confidence metric (0-100%)
+  - 90-100%: Excellent, stable
+  - 70-89%: Good, reliable
+  - 50-69%: Fair, may be unstable
+  - <50%: Poor, unreliable
+
+**File Saving**
+- Real-time WAV recording (32-bit float, mono)
+- Saved to current working directory
+- Warning if filename doesn't end with `.wav`
 
 ## Dependencies
 
-- **eframe/egui**: Immediate mode GUI framework
-- **cpal**: Cross-platform audio I/O library
-- **hound**: WAV file I/O for recording
-- **audio-utils**: Audio data structures
-- **audio-cleaning**: Audio preprocessing
-- **pitch-detection-utils**: Pitch detection algorithms
+```toml
+eframe = "0.30"      # GUI framework (egui)
+cpal = "0.15"        # Cross-platform audio I/O
+hound = "3.5"        # WAV file I/O
+audio-utils          # Audio data structures
+audio-cleaning       # Bandpass filtering
+pitch-detection-utils # YIN algorithm with ThreadSafeYinDetector
+```
 
-## Required APIs from Other Crates
+## API Requirements
 
-The GUI implementation uses the following APIs:
+This crate depends on:
+- `audio_utils::MonoAudio` - Audio data representation
+- `audio_cleaning::clean_audio_for_pitch` - Signal preprocessing
+- `pitch_detection_utils::ThreadSafeYinDetector` - Thread-safe pitch detection wrapper (added)
+- `pitch_detection_utils::hz_to_note_name` - Frequency to note conversion
 
-- `audio_utils::MonoAudio`: Audio data representation with sample rate
-- `audio_cleaning::clean_audio_for_pitch`: Bandpass filtering for vocal range
-- `pitch_detection_utils::ThreadSafeYinDetector`: Thread-safe YIN pitch detection (newly added)
-- `pitch_detection_utils::hz_to_note_name`: Converts frequency to note name
+**Note**: `ThreadSafeYinDetector` was added to `pitch-detection-utils` to enable thread-safe pitch detection. It wraps the external crate's `YINDetector` (which uses `Rc<RefCell<>>`) with `Arc<Mutex<>>`.
 
-**Modified Crates**:
-- `pitch-detection-utils`: Added `ThreadSafeYinDetector` wrapper that can be used in multi-threaded contexts
+## Troubleshooting
 
-## Future Enhancements
+### No Pitch Detected
+- **Cause**: Input too quiet, noisy environment, or non-pitched sound
+- **Solution**: Increase microphone gain, enable bandpass filter, sing/play louder
 
-### Recommended API Additions for Other Crates
+### Error Starting Recording
+- **Cause**: No input device, permissions denied, or device in use
+- **Solution**: Check microphone connection, grant permissions, close other audio apps
 
-While the current GUI works with existing APIs, the following additions would improve functionality:
+### Unstable/Jumping Pitch
+- **Cause**: Inconsistent input, background noise, or vibrato
+- **Solution**: Reduce noise, enable bandpass filter, practice steady tone
 
-#### audio-cleaning crate
+### File Won't Save
+- **Cause**: Invalid filename, permission issues, or disk full
+- **Solution**: Ensure filename ends with `.wav`, check permissions and disk space
 
-1. **Real-time Noise Profile Estimation**:
-   ```rust
-   pub fn estimate_noise_from_audio_chunk(audio: &MonoAudio) -> Spectrum
-   ```
-   - Currently, spectral gating requires pre-recorded noise profile
-   - A real-time version could estimate noise from quiet portions of the signal
+## Limitations
 
-2. **Configurable Bandpass Parameters**:
-   ```rust
-   pub fn bandpass_filter(audio: &MonoAudio, low_hz: f32, high_hz: f32) -> MonoAudio
-   ```
-   - Allow users to customize the frequency range (currently hardcoded to 80-800 Hz)
+1. **Mono only**: Stereo inputs are mixed to mono
+2. **Default device**: No device selection UI
+3. **Fixed buffer**: 4096 samples, not configurable
+4. **Spectral gating**: Not functional (requires noise profile)
 
-#### pitch-detection crate
+## Implementation Notes
 
-1. **Confidence Metrics**:
-   - The current clarity metric could be enhanced with more detailed confidence information
-   - Add methods to adjust detection sensitivity in real-time
+### Design Decisions
 
-2. **Thread-Safe Detector**:
-   - Consider providing a `Send` version of the pitch detector for multi-threaded use
-   - Current implementation uses `Rc` which is not thread-safe
+**Why thread-local storage?**
+The external `pitch-detection` crate uses `Rc<RefCell<>>` for buffer pooling, making it non-`Send`. We use `thread_local!` to create detector instances per-thread, avoiding the need to send the detector across thread boundaries while still processing on the audio thread.
 
-## Known Limitations
+**Why egui?**
+Immediate mode GUI is simple to reason about and well-suited for real-time updates. Pure Rust with minimal dependencies and excellent cross-platform support.
 
-1. **Spectral Gating**: Currently disabled as it requires a pre-recorded noise profile
-2. **Audio Device Selection**: Uses default input device; no device picker UI
-3. **Buffer Size**: Fixed at 4096 samples; could be made configurable for latency tuning
-4. **Mono Only**: Only processes mono audio; stereo inputs are mixed down
+**Why fixed buffer size?**
+4096 samples at 44.1kHz (~93ms) balances latency and stability. Smaller buffers risk audio glitches; larger buffers increase latency. This is optimal for real-time pitch detection.
 
-## Performance Considerations
+### Security
 
-- Buffer size of 4096 samples provides good balance between latency and stability
-- YIN detector window size of 2048 samples suitable for real-time use
-- GUI requests continuous repaint for responsive updates
-- Audio processing happens on main thread to avoid Send/Sync issues with detector
+- No unsafe code
+- Bounded memory allocations
+- File paths not validated (relies on OS, low risk)
+- Mutex unwrap acceptable (poisoned mutex = bug)
+
+### Future Enhancements
+
+**High Priority**
+- Audio device selection UI
+- Configurable buffer size
+- Real-time noise profile estimation
+
+**Medium Priority**
+- Waveform visualization
+- Pitch history graph
+- Keyboard shortcuts
+
+**Low Priority**
+- MIDI output
+- Alternative tuning references (A=432 Hz)
+- Dark/light theme toggle
+
+## Building
+
+Development build:
+```bash
+cargo build -p gui
+```
+
+Optimized release:
+```bash
+cargo build -p gui --release
+```
+
+Run tests:
+```bash
+cargo test -p gui
+```
+
+## License
+
+See repository root for license information.
