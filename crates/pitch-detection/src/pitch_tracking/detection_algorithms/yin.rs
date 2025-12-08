@@ -2,6 +2,7 @@ use pitch_detection::detector::yin::YINDetector;
 use pitch_detection::detector::PitchDetector;
 use crate::pitch_tracking::detection::{MonoPitchDetector, Pitch};
 use audio_utils::MonoAudioSource;
+use std::sync::{Arc, Mutex};
 
 
 pub struct ExternalYinDetector {
@@ -29,6 +30,66 @@ impl MonoPitchDetector for ExternalYinDetector {
         let signal = mono_audio.mono_samples();
         
         self.detector.get_pitch(signal, sample_rate as usize, self.power_threshold, self.clarity_threshold)
+    }
+}
+
+/// Thread-safe wrapper around YIN detector that can be sent across threads.
+/// 
+/// This wrapper uses Arc<Mutex<>> to make the detector Send-safe, allowing
+/// pitch detection to be performed on the audio callback thread rather than
+/// the main thread. The mutex overhead is negligible compared to the YIN
+/// algorithm's computation time (~5-10ms).
+pub struct ThreadSafeYinDetector {
+    power_threshold: f32,
+    clarity_threshold: f32,
+    window_size: usize,
+    padding: usize,
+    detector: Arc<Mutex<YINDetector<f32>>>,
+}
+
+impl ThreadSafeYinDetector {
+    /// Create a new thread-safe YIN detector.
+    /// 
+    /// # Arguments
+    /// * `power_threshold` - Minimum signal power threshold (0.0-1.0)
+    /// * `clarity_threshold` - Minimum clarity for pitch detection (0.0-1.0)
+    /// * `window_size` - Size of the analysis window in samples
+    /// * `padding` - Padding size for the detector
+    pub fn new(power_threshold: f32, clarity_threshold: f32, window_size: usize, padding: usize) -> Self {
+        ThreadSafeYinDetector {
+            power_threshold,
+            clarity_threshold,
+            window_size,
+            padding,
+            detector: Arc::new(Mutex::new(YINDetector::<f32>::new(window_size, padding))),
+        }
+    }
+    
+    /// Clone the detector reference, allowing it to be shared across threads.
+    /// The underlying detector is shared via Arc, so all clones use the same detector.
+    pub fn clone_detector(&self) -> Self {
+        ThreadSafeYinDetector {
+            power_threshold: self.power_threshold,
+            clarity_threshold: self.clarity_threshold,
+            window_size: self.window_size,
+            padding: self.padding,
+            detector: Arc::clone(&self.detector),
+        }
+    }
+}
+
+impl MonoPitchDetector for ThreadSafeYinDetector {
+    fn get_mono_pitch<T: MonoAudioSource>(&mut self, mono_audio: T) -> Option<Pitch> {
+        let sample_rate = mono_audio.sample_rate();
+        let signal = mono_audio.mono_samples();
+        
+        // Lock the detector for the duration of pitch detection
+        self.detector.lock().unwrap().get_pitch(
+            signal, 
+            sample_rate as usize, 
+            self.power_threshold, 
+            self.clarity_threshold
+        )
     }
 }
 

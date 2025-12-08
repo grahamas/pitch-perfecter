@@ -11,7 +11,7 @@ pub mod music_notation;
 
 pub use pitch_tracking::{
     detection::{MonoPitchDetector, Pitch},
-    detection_algorithms::yin::ExternalYinDetector,
+    detection_algorithms::yin::{ExternalYinDetector, ThreadSafeYinDetector},
     tracking::{PitchTracker, PitchTrackerConfig},
 };
 pub use music_notation::hz_to_note_name;
