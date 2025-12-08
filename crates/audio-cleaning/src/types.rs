@@ -37,13 +37,13 @@ impl Spectrum {
         let mut buffer = self.complex.clone();
         IFFT_CACHE.with(|cache| {
             let mut cache_map = cache.borrow_mut();
-            if !cache_map.contains_key(&self.n) {
+            let ifft = cache_map.entry(self.n).or_insert_with(|| {
                 FFT_PLANNER.with(|planner| {
                     let mut planner = planner.borrow_mut();
-                    cache_map.insert(self.n, planner.plan_fft(self.n, FftDirection::Inverse));
-                });
-            }
-            cache_map[&self.n].process(&mut buffer);
+                    planner.plan_fft(self.n, FftDirection::Inverse)
+                })
+            });
+            ifft.process(&mut buffer);
         });
         buffer.iter().map(|c| c.re / self.n as f32).collect()
     }
@@ -58,13 +58,13 @@ fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
     let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
     FFT_CACHE.with(|cache| {
         let mut cache_map = cache.borrow_mut();
-        if !cache_map.contains_key(&n_fft) {
+        let fft = cache_map.entry(n_fft).or_insert_with(|| {
             FFT_PLANNER.with(|planner| {
                 let mut planner = planner.borrow_mut();
-                cache_map.insert(n_fft, planner.plan_fft_forward(n_fft));
-            });
-        }
-        cache_map[&n_fft].process(&mut buffer);
+                planner.plan_fft_forward(n_fft)
+            })
+        });
+        fft.process(&mut buffer);
     });
     buffer
 }
