@@ -181,6 +181,11 @@ impl MicrophoneRecorder {
     /// * `Ok(MonoAudio)` - Successfully recorded audio
     /// * `Err(RecordingError)` - Error stopping or retrieving the audio
     pub fn stop(mut self) -> Result<MonoAudio, RecordingError> {
+        // Pause the stream before dropping to avoid ALSA panic
+        if let Some(stream) = &self.stream {
+            let _ = stream.pause();
+        }
+        
         // Drop the stream to stop recording
         self.stream.take();
         
@@ -286,6 +291,9 @@ pub fn record_from_microphone(duration_secs: f32) -> Result<MonoAudio, Recording
     
     // Wait for the specified duration
     std::thread::sleep(std::time::Duration::from_secs_f32(duration_secs));
+    
+    // Pause the stream before dropping to avoid ALSA panic
+    let _ = stream.pause();
     
     // Stop recording
     drop(stream);

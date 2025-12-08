@@ -97,6 +97,8 @@ impl AudioRecorder {
     
     pub fn stop(&mut self) -> Result<(), String> {
         if let Some(stream) = self.stream.take() {
+            // Pause the stream before dropping to avoid ALSA panic
+            let _ = stream.pause();
             drop(stream);
         }
         Ok(())
