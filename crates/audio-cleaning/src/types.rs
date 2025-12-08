@@ -1,10 +1,14 @@
 use rustfft::num_complex::Complex;
-use rustfft::{FftPlanner, FftDirection};
+use rustfft::{Fft, FftPlanner, FftDirection};
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::sync::Arc;
 
 thread_local! {
-    static FFT_PLANNER_CACHE: RefCell<FftPlanner<f32>> = 
-        RefCell::new(FftPlanner::new());
+    static FFT_CACHE: RefCell<HashMap<usize, Arc<dyn Fft<f32>>>> = 
+        RefCell::new(HashMap::new());
+    static IFFT_CACHE: RefCell<HashMap<usize, Arc<dyn Fft<f32>>>> = 
+        RefCell::new(HashMap::new());
 }
 
 /// Struct representing a computed spectrum, with ability to invert (IFFT) back to time domain
@@ -28,10 +32,13 @@ impl Spectrum {
 
     /// Invert the spectrum back to the time domain (real part only)
     pub fn to_time_domain(&self) -> Vec<f32> {
-        FFT_PLANNER_CACHE.with(|cache| {
+        IFFT_CACHE.with(|cache| {
             let mut buffer = self.complex.clone();
-            let mut planner = cache.borrow_mut();
-            let ifft = planner.plan_fft(self.n, FftDirection::Inverse);
+            let mut cache_map = cache.borrow_mut();
+            let ifft = cache_map.entry(self.n).or_insert_with(|| {
+                let mut planner = FftPlanner::new();
+                planner.plan_fft(self.n, FftDirection::Inverse)
+            });
             ifft.process(&mut buffer);
             buffer.iter().map(|c| c.re / self.n as f32).collect()
         })
@@ -44,9 +51,12 @@ impl Spectrum {
 }
 
 fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
-    FFT_PLANNER_CACHE.with(|cache| {
-        let mut planner = cache.borrow_mut();
-        let fft = planner.plan_fft_forward(n_fft);
+    FFT_CACHE.with(|cache| {
+        let mut cache_map = cache.borrow_mut();
+        let fft = cache_map.entry(n_fft).or_insert_with(|| {
+            let mut planner = FftPlanner::new();
+            planner.plan_fft_forward(n_fft)
+        });
         let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
         fft.process(&mut buffer);
         buffer
@@ -170,7 +180,7 @@ mod tests {
 
     #[test]
     fn test_fft_planner_reuse() {
-        // Test that multiple FFT operations work correctly (reusing the cached planner)
+        // Test that multiple FFT operations work correctly (reusing cached FFT/IFFT objects)
         let signal1 = vec![1.0, 0.0, -1.0, 0.0];
         let signal2 = vec![0.5, 1.0, 0.5, 0.0];
 
