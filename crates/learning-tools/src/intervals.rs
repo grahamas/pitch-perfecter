@@ -1,9 +1,10 @@
 //! Musical intervals and related utilities
 //!
 //! This module defines musical intervals, their semitone distances,
-//! and utilities for working with musical notes and frequencies.
+//! and utilities for working with musical notes.
 
 use std::fmt;
+use crate::note::Note;
 
 /// Standard musical intervals
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -121,46 +122,49 @@ impl fmt::Display for Interval {
     }
 }
 
-/// Calculate the frequency of a note given a starting frequency and an interval
+/// Apply an interval to a note
 ///
 /// # Arguments
-/// * `base_freq` - The starting frequency in Hz
+/// * `base_note` - The starting note
 /// * `interval` - The interval to add
+/// * `ascending` - Whether to go up (true) or down (false)
 ///
 /// # Returns
-/// The frequency of the target note in Hz
-pub fn apply_interval(base_freq: f32, interval: Interval) -> f32 {
-    base_freq * 2.0_f32.powf(interval.semitones() as f32 / 12.0)
+/// The target note after applying the interval
+pub fn apply_interval(base_note: Note, interval: Interval, ascending: bool) -> Note {
+    let semitones = if ascending {
+        interval.semitones()
+    } else {
+        -interval.semitones()
+    };
+    base_note.transpose(semitones)
 }
 
-/// Calculate the interval between two frequencies
+/// Calculate the interval between two notes
 ///
 /// # Arguments
-/// * `freq1` - The first frequency in Hz
-/// * `freq2` - The second frequency in Hz
+/// * `note1` - The first note
+/// * `note2` - The second note
 ///
 /// # Returns
-/// The interval in semitones (positive if freq2 > freq1, negative otherwise)
-pub fn calculate_interval_semitones(freq1: f32, freq2: f32) -> f32 {
-    if freq1 <= 0.0 || freq2 <= 0.0 {
-        return 0.0;
-    }
-    12.0 * (freq2 / freq1).log2()
+/// The interval in semitones (positive if note2 > note1, negative otherwise)
+pub fn calculate_interval_semitones(note1: Note, note2: Note) -> i32 {
+    note1.interval_to(&note2)
 }
 
 /// Find the closest standard interval to a given number of semitones
 ///
 /// # Arguments
-/// * `semitones` - The number of semitones (can be fractional)
+/// * `semitones` - The number of semitones
 ///
 /// # Returns
 /// The closest standard interval
-pub fn closest_interval(semitones: f32) -> Interval {
+pub fn closest_interval(semitones: i32) -> Interval {
     let intervals = Interval::all();
     intervals
         .into_iter()
         .min_by_key(|interval| {
-            ((interval.semitones() as f32 - semitones).abs() * 100.0) as i32
+            (interval.semitones() - semitones).abs()
         })
         .unwrap_or(Interval::Unison)
 }
@@ -185,43 +189,54 @@ mod tests {
 
     #[test]
     fn test_apply_interval() {
-        // A4 = 440 Hz
-        let a4 = 440.0;
+        use crate::note::{Note, PitchClass};
         
-        // A4 + octave = A5 = 880 Hz
-        let a5 = apply_interval(a4, Interval::Octave);
-        assert!((a5 - 880.0).abs() < 0.1);
+        let a4 = Note::new(PitchClass::A, 4);
         
-        // A4 + perfect fifth = E5 ≈ 659.26 Hz
-        let e5 = apply_interval(a4, Interval::PerfectFifth);
-        assert!((e5 - 659.26).abs() < 0.1);
+        // A4 + octave ascending = A5
+        let a5 = apply_interval(a4, Interval::Octave, true);
+        assert_eq!(a5.pitch_class, PitchClass::A);
+        assert_eq!(a5.octave, 5);
         
-        // A4 + major third = C#5 ≈ 554.37 Hz
-        let cs5 = apply_interval(a4, Interval::MajorThird);
-        assert!((cs5 - 554.37).abs() < 0.1);
+        // A4 + perfect fifth ascending = E5
+        let e5 = apply_interval(a4, Interval::PerfectFifth, true);
+        assert_eq!(e5.pitch_class, PitchClass::E);
+        assert_eq!(e5.octave, 5);
+        
+        // A4 + major third ascending = C#5
+        let cs5 = apply_interval(a4, Interval::MajorThird, true);
+        assert_eq!(cs5.pitch_class, PitchClass::CSharp);
+        assert_eq!(cs5.octave, 5);
+        
+        // A4 + octave descending = A3
+        let a3 = apply_interval(a4, Interval::Octave, false);
+        assert_eq!(a3.pitch_class, PitchClass::A);
+        assert_eq!(a3.octave, 3);
     }
 
     #[test]
     fn test_calculate_interval_semitones() {
-        let a4 = 440.0;
-        let a5 = 880.0;
+        use crate::note::{Note, PitchClass};
+        
+        let a4 = Note::new(PitchClass::A, 4);
+        let a5 = Note::new(PitchClass::A, 5);
         
         // Octave = 12 semitones
         let semitones = calculate_interval_semitones(a4, a5);
-        assert!((semitones - 12.0).abs() < 0.01);
+        assert_eq!(semitones, 12);
         
-        // Perfect fifth ≈ 7 semitones
-        let e5 = 659.26;
+        // Perfect fifth = 7 semitones
+        let e5 = Note::new(PitchClass::E, 5);
         let semitones = calculate_interval_semitones(a4, e5);
-        assert!((semitones - 7.0).abs() < 0.1);
+        assert_eq!(semitones, 7);
     }
 
     #[test]
     fn test_closest_interval() {
-        assert_eq!(closest_interval(0.0), Interval::Unison);
-        assert_eq!(closest_interval(4.1), Interval::MajorThird);
-        assert_eq!(closest_interval(6.8), Interval::PerfectFifth);
-        assert_eq!(closest_interval(11.9), Interval::Octave);
+        assert_eq!(closest_interval(0), Interval::Unison);
+        assert_eq!(closest_interval(4), Interval::MajorThird);
+        assert_eq!(closest_interval(7), Interval::PerfectFifth);
+        assert_eq!(closest_interval(12), Interval::Octave);
     }
 
     #[test]

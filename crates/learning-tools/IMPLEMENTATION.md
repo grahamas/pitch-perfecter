@@ -12,6 +12,18 @@ A complete learning system for musical intervals has been implemented, combining
 
 ## Modules
 
+### `note.rs`
+
+Defines musical note representation:
+
+- **`PitchClass` enum**: Musical pitch classes (C, C#, D, etc.)
+- **`Note` struct**: Combines pitch class with octave (e.g., A4, C#5)
+  - Convert to/from MIDI note numbers
+  - Convert to/from frequencies (A4 = 440 Hz)
+  - Parse from strings ("A4", "C#5", "Bb3")
+  - Transpose by semitones
+  - Calculate intervals between notes
+
 ### `intervals.rs`
 
 Defines musical intervals and provides utilities for working with them:
@@ -21,8 +33,8 @@ Defines musical intervals and provides utilities for working with them:
   - Starts with most fundamental (octave, perfect fifth, perfect fourth)
   - Progresses to more complex intervals (major/minor thirds, sixths, sevenths)
   - Ends with most challenging (tritone, minor second)
-- **`apply_interval()`**: Calculate target frequency from base frequency and interval
-- **`calculate_interval_semitones()`**: Measure interval between two frequencies
+- **`apply_interval()`**: Apply an interval to a note (ascending or descending)
+- **`calculate_interval_semitones()`**: Measure interval between two notes
 - **`closest_interval()`**: Find the standard interval closest to a given semitone distance
 
 ### `spaced_repetition.rs`
@@ -51,7 +63,7 @@ Implements a spaced repetition system based on the SM-2 algorithm:
 Combines intervals and spaced repetition into a complete learning system:
 
 - **`IntervalExercise`**: Represents a single practice exercise
-  - Base frequency (what user hears)
+  - Base note (starting point)
   - Target interval to practice
   - Direction (ascending or descending)
   - Methods to check and rate user responses
@@ -61,7 +73,7 @@ Combines intervals and spaced repetition into a complete learning system:
   - Records performance and updates schedule
   - Tracks statistics (mastered intervals, average easiness, etc.)
 - **`IntervalLearningConfig`**: Customizable settings
-  - Frequency range for exercises
+  - Note range for exercises (e.g., A3 to A5)
   - Whether to practice both directions
   - Tolerance for correct responses (in cents)
 
@@ -77,6 +89,7 @@ Combines intervals and spaced repetition into a complete learning system:
 
 ```rust
 use learning_tools::interval_learning::IntervalLearningPlan;
+use learning_tools::note::{Note, PitchClass};
 use learning_tools::spaced_repetition::PerformanceRating;
 
 // Create a new learning plan
@@ -84,20 +97,20 @@ let mut plan = IntervalLearningPlan::new();
 
 // Get the next exercise to practice
 if let Some(exercise) = plan.next_exercise() {
-    println!("Practice: {} {} from {:.2} Hz",
+    println!("Practice: {} {} from {}",
         if exercise.ascending { "ascending" } else { "descending" },
         exercise.interval,
-        exercise.base_frequency
+        exercise.base_note
     );
     
-    let target = exercise.target_frequency();
-    println!("Target frequency: {:.2} Hz", target);
+    let target = exercise.target_note();
+    println!("Target note: {}", target);
     
-    // Simulate user producing a pitch
-    let user_freq = target * 1.01; // Slightly sharp
+    // User produces a note (detected via pitch detection)
+    let user_note = Note::new(PitchClass::E, 5); // Example
     
     // Record the result - automatically rates and schedules
-    plan.record_exercise_with_frequency(&exercise, user_freq);
+    plan.record_exercise_with_note(&exercise, user_note);
     
     // Or record with explicit rating
     plan.record_exercise(&exercise, PerformanceRating::Good);
@@ -122,7 +135,7 @@ Run tests with:
 cargo test --package learning-tools
 ```
 
-All 32 tests pass successfully.
+All 43 tests pass successfully (including 11 tests for the Note module).
 
 ## Integration with Other Crates
 
@@ -131,8 +144,8 @@ To fully integrate this learning system into a working application, the followin
 ### GUI Crate
 
 1. **Practice Screen**
-   - Display current exercise (base frequency, interval name, direction)
-   - Play the base frequency using `sound-synth`
+   - Display current exercise (base note, interval name, direction)
+   - Play the base note using `sound-synth` (convert note to frequency)
    - Record user's voice using audio capture
    - Show visual feedback (correct/incorrect)
    - Display statistics and progress
@@ -146,7 +159,8 @@ To fully integrate this learning system into a working application, the followin
 3. **Audio Integration**
    - Use `audio-utils` for audio capture
    - Use `pitch-detection-utils` to detect user's pitch
-   - Use `sound-synth` to play reference tones
+   - Convert detected frequency to Note using `Note::from_frequency()`
+   - Use `sound-synth` to play reference tones (convert notes to frequencies)
    - Consider using `audio-cleaning` to improve pitch detection accuracy
 
 ### Pitch Detection Integration
@@ -155,6 +169,7 @@ The GUI would need to:
 ```rust
 use pitch_detection_utils::{PitchTracker, PitchTrackerConfig};
 use learning_tools::interval_learning::IntervalLearningPlan;
+use learning_tools::note::Note;
 
 // Create pitch tracker
 let config = PitchTrackerConfig::default();
@@ -164,24 +179,27 @@ let mut tracker = PitchTracker::new(config);
 let mut plan = IntervalLearningPlan::new();
 let exercise = plan.next_exercise().unwrap();
 
-// Play base frequency (using sound-synth)
-// ... play exercise.base_frequency ...
+// Play base note (using sound-synth - convert note to frequency)
+let base_freq = exercise.base_note.to_frequency();
+// ... play base_freq ...
 
 // Record user singing the target interval
 // ... capture audio ...
 
-// Detect pitch
+// Detect pitch and convert to note
 let pitch = tracker.get_pitch(&audio_samples);
 if let Some(detected_pitch) = pitch {
-    plan.record_exercise_with_frequency(&exercise, detected_pitch.frequency);
+    if let Some(user_note) = Note::from_frequency(detected_pitch.frequency) {
+        plan.record_exercise_with_note(&exercise, user_note);
+    }
 }
 ```
 
 ### Sound Synthesis
 
 The GUI could use `sound-synth` to:
-1. Play the base frequency as a reference
-2. Optionally play the target frequency for comparison
+1. Play the base note as a reference (convert note to frequency first)
+2. Optionally play the target note for comparison
 3. Generate confirmation sounds for correct/incorrect responses
 
 ### Data Persistence
@@ -216,27 +234,33 @@ let pitch = tracker.get_pitch(&cleaned);
 
 ## Design Decisions
 
-1. **Interval Ordering**: Based on typical musical utility and consonance
+1. **Note-based API**: Uses discrete musical notes rather than frequencies
+   - Exercises work with Note types (e.g., A4, C#5) instead of Hz values
+   - More intuitive for musical education
+   - Audio layer (GUI/sound-synth/pitch-detection) handles frequency conversion
+   - Clear separation between learning logic and audio processing
+
+2. **Interval Ordering**: Based on typical musical utility and consonance
    - Perfect intervals first (octave, fifth, fourth)
    - Major/minor thirds (triad components)
    - Common melodic intervals (sixths, seconds)
    - Challenging intervals last (tritone, minor second)
 
-2. **Spaced Repetition**: SM-2 algorithm chosen for:
+3. **Spaced Repetition**: SM-2 algorithm chosen for:
    - Proven effectiveness in learning applications
    - Simple to implement and understand
    - Adapts to individual user performance
 
-3. **Separate Ascending/Descending**: Intervals sound different in each direction
+4. **Separate Ascending/Descending**: Intervals sound different in each direction
    - Separate schedulers allow independent mastery
    - Can be disabled via configuration
 
-4. **Cent-based Tolerance**: Professional standard for pitch accuracy
+5. **Cent-based Tolerance**: Professional standard for pitch accuracy
    - 50 cents (half semitone) default tolerance
    - Configurable for different skill levels
    - Gradual rating system for nuanced feedback
 
-5. **Frequency Range**: Default A3-A5 (220-880 Hz)
+6. **Note Range**: Default A3-A5
    - Comfortable vocal range for most users
    - Configurable for different vocal ranges or instruments
 

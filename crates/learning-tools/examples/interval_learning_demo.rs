@@ -7,6 +7,7 @@
 
 use learning_tools::interval_learning::{IntervalLearningPlan, IntervalLearningConfig};
 use learning_tools::intervals::Interval;
+use learning_tools::note::{Note, PitchClass};
 
 fn main() {
     println!("=== Interval Learning Demo ===\n");
@@ -29,23 +30,23 @@ fn main() {
             println!("  Direction: {}", 
                 if exercise.ascending { "Ascending" } else { "Descending" });
             println!("  Interval: {}", exercise.interval);
-            println!("  Base frequency: {:.2} Hz", exercise.base_frequency);
-            println!("  Target frequency: {:.2} Hz", exercise.target_frequency());
+            println!("  Base note: {}", exercise.base_note);
+            println!("  Target note: {}", exercise.target_note());
             
             // Simulate user response (in real app, this would be pitch detection)
             // Here we simulate different levels of accuracy
-            let target = exercise.target_frequency();
-            let user_response = match session_num {
+            let target = exercise.target_note();
+            let user_note = match session_num {
                 1 => target,                              // Perfect
-                2 => target * 1.01,                       // Good (slightly sharp)
-                3 => target * 1.03,                       // Hesitant
-                4 => target * 1.06,                       // Difficult (1 semitone sharp)
-                _ => target * 2.0_f32.powf(2.0 / 12.0),  // Incorrect (2 semitones off)
+                2 => target.transpose(0),                 // Perfect (same note)
+                3 => target.transpose(1),                 // Off by 1 semitone
+                4 => target.transpose(2),                 // Off by 2 semitones
+                _ => target.transpose(-3),                // Off by 3 semitones
             };
             
             // Rate and record the response
-            let rating = exercise.rate_response(user_response);
-            println!("  User sang: {:.2} Hz", user_response);
+            let rating = exercise.rate_response(user_note);
+            println!("  User sang: {}", user_note);
             println!("  Rating: {:?}", rating);
             plan.record_exercise(&exercise, rating);
             println!();
@@ -77,16 +78,16 @@ fn main() {
     println!("\n=== Custom Configuration Demo ===\n");
     
     let custom_config = IntervalLearningConfig {
-        frequency_range: (200.0, 600.0), // Lower range
+        note_range: (Note::new(PitchClass::C, 3), Note::new(PitchClass::C, 5)),
         practice_both_directions: false,  // Only ascending
         tolerance_cents: 30.0,            // Stricter tolerance
     };
     
     let custom_plan = IntervalLearningPlan::with_config(custom_config);
     println!("Custom plan configuration:");
-    println!("  Frequency range: {:.0}-{:.0} Hz", 
-        custom_plan.config().frequency_range.0,
-        custom_plan.config().frequency_range.1);
+    println!("  Note range: {} to {}", 
+        custom_plan.config().note_range.0,
+        custom_plan.config().note_range.1);
     println!("  Both directions: {}", 
         custom_plan.config().practice_both_directions);
     println!("  Tolerance: {} cents", 

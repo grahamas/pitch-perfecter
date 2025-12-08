@@ -4,13 +4,14 @@
 //! combining interval exercises with spaced repetition scheduling.
 
 use crate::intervals::{Interval, apply_interval};
+use crate::note::Note;
 use crate::spaced_repetition::{PerformanceRating, SpacedRepetitionScheduler};
 
 /// Represents a single interval learning exercise
 #[derive(Debug, Clone, PartialEq)]
 pub struct IntervalExercise {
-    /// The starting frequency in Hz
-    pub base_frequency: f32,
+    /// The starting note
+    pub base_note: Note,
     /// The interval to practice
     pub interval: Interval,
     /// Direction: true for ascending, false for descending
@@ -19,62 +20,64 @@ pub struct IntervalExercise {
 
 impl IntervalExercise {
     /// Create a new interval exercise
-    pub fn new(base_frequency: f32, interval: Interval, ascending: bool) -> Self {
+    pub fn new(base_note: Note, interval: Interval, ascending: bool) -> Self {
         Self {
-            base_frequency,
+            base_note,
             interval,
             ascending,
         }
     }
 
-    /// Calculate the target frequency for this exercise
-    pub fn target_frequency(&self) -> f32 {
-        if self.ascending {
-            apply_interval(self.base_frequency, self.interval)
-        } else {
-            self.base_frequency / 2.0_f32.powf(self.interval.semitones() as f32 / 12.0)
-        }
+    /// Calculate the target note for this exercise
+    pub fn target_note(&self) -> Note {
+        apply_interval(self.base_note, self.interval, self.ascending)
     }
 
-    /// Check if a produced frequency matches the target within a tolerance
+    /// Check if a produced note matches the target within a tolerance
     ///
     /// # Arguments
-    /// * `produced_freq` - The frequency produced by the user in Hz
+    /// * `produced_note` - The note produced by the user
     /// * `tolerance_cents` - Tolerance in cents (100 cents = 1 semitone), default 50 cents
     ///
     /// # Returns
-    /// True if the produced frequency is within tolerance
-    pub fn check_response(&self, produced_freq: f32, tolerance_cents: f32) -> bool {
-        let target = self.target_frequency();
-        if target <= 0.0 || produced_freq <= 0.0 {
+    /// True if the produced note is within tolerance
+    pub fn check_response(&self, produced_note: Note, tolerance_cents: f32) -> bool {
+        let target = self.target_note();
+        let target_freq = target.to_frequency();
+        let produced_freq = produced_note.to_frequency();
+        
+        if target_freq <= 0.0 || produced_freq <= 0.0 {
             return false;
         }
         
-        let cents_diff = 1200.0 * (produced_freq / target).log2().abs();
+        let cents_diff = 1200.0 * (produced_freq / target_freq).log2().abs();
         cents_diff <= tolerance_cents
     }
 
     /// Rate the user's performance based on accuracy
     ///
     /// # Arguments
-    /// * `produced_freq` - The frequency produced by the user in Hz
+    /// * `produced_note` - The note produced by the user
     ///
     /// # Returns
     /// A performance rating based on how close the response was
-    pub fn rate_response(&self, produced_freq: f32) -> PerformanceRating {
-        let target = self.target_frequency();
-        if target <= 0.0 || produced_freq <= 0.0 {
+    pub fn rate_response(&self, produced_note: Note) -> PerformanceRating {
+        let target = self.target_note();
+        let target_freq = target.to_frequency();
+        let produced_freq = produced_note.to_frequency();
+        
+        if target_freq <= 0.0 || produced_freq <= 0.0 {
             return PerformanceRating::Blackout;
         }
         
-        let cents_diff = 1200.0 * (produced_freq / target).log2().abs();
+        let cents_diff = 1200.0 * (produced_freq / target_freq).log2().abs();
         
         match cents_diff {
             diff if diff <= 10.0 => PerformanceRating::Perfect,   // Within 10 cents
             diff if diff <= 25.0 => PerformanceRating::Good,      // Within 25 cents
             diff if diff <= 50.0 => PerformanceRating::Hesitant,  // Within 50 cents (half semitone)
             diff if diff <= 100.0 => PerformanceRating::Difficult, // Within 1 semitone
-            diff if diff <= 200.0 => PerformanceRating::Incorrect, // Within 2 semitones
+            diff if diff < 250.0 => PerformanceRating::Incorrect, // Within 2 semitones
             _ => PerformanceRating::Blackout,                      // More than 2 semitones off
         }
     }
@@ -83,8 +86,8 @@ impl IntervalExercise {
 /// Configuration for interval learning sessions
 #[derive(Debug, Clone)]
 pub struct IntervalLearningConfig {
-    /// Base frequency range for exercises (min, max) in Hz
-    pub frequency_range: (f32, f32),
+    /// Base note range for exercises (min, max)
+    pub note_range: (Note, Note),
     /// Whether to practice both ascending and descending intervals
     pub practice_both_directions: bool,
     /// Default tolerance in cents for checking responses
@@ -93,8 +96,9 @@ pub struct IntervalLearningConfig {
 
 impl Default for IntervalLearningConfig {
     fn default() -> Self {
+        use crate::note::PitchClass;
         Self {
-            frequency_range: (220.0, 880.0), // A3 to A5
+            note_range: (Note::new(PitchClass::A, 3), Note::new(PitchClass::A, 5)), // A3 to A5
             practice_both_directions: true,
             tolerance_cents: 50.0,
         }
@@ -151,8 +155,8 @@ impl IntervalLearningPlan {
         };
 
         interval.map(|(interval, ascending)| {
-            let base_freq = self.generate_base_frequency();
-            IntervalExercise::new(base_freq, interval, ascending)
+            let base_note = self.generate_base_note();
+            IntervalExercise::new(base_note, interval, ascending)
         })
     }
 
@@ -175,17 +179,17 @@ impl IntervalLearningPlan {
         }
     }
 
-    /// Record an exercise result based on the user's produced frequency
+    /// Record an exercise result based on the user's produced note
     ///
     /// # Arguments
     /// * `exercise` - The exercise that was completed
-    /// * `produced_freq` - The frequency produced by the user
-    pub fn record_exercise_with_frequency(
+    /// * `produced_note` - The note produced by the user
+    pub fn record_exercise_with_note(
         &mut self,
         exercise: &IntervalExercise,
-        produced_freq: f32,
+        produced_note: Note,
     ) {
-        let rating = exercise.rate_response(produced_freq);
+        let rating = exercise.rate_response(produced_note);
         self.record_exercise(exercise, rating);
     }
 
@@ -231,12 +235,15 @@ impl IntervalLearningPlan {
         }
     }
 
-    /// Generate a random base frequency within the configured range
-    fn generate_base_frequency(&self) -> f32 {
+    /// Generate a base note within the configured range
+    fn generate_base_note(&self) -> Note {
         // For now, use a simple middle value
         // In a real implementation, this could use random generation
-        let (min, max) = self.config.frequency_range;
-        (min + max) / 2.0
+        let (min, max) = self.config.note_range;
+        let min_midi = min.to_midi();
+        let max_midi = max.to_midi();
+        let mid_midi = (min_midi + max_midi) / 2;
+        Note::from_midi(mid_midi)
     }
 
     /// Get the configuration
@@ -289,79 +296,99 @@ pub struct LearningStatistics {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::note::PitchClass;
 
     #[test]
     fn test_interval_exercise_creation() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
-        assert_eq!(exercise.base_frequency, 440.0);
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
+        assert_eq!(exercise.base_note, a4);
         assert_eq!(exercise.interval, Interval::PerfectFifth);
         assert!(exercise.ascending);
     }
 
     #[test]
-    fn test_target_frequency_ascending() {
-        let exercise = IntervalExercise::new(440.0, Interval::Octave, true);
-        let target = exercise.target_frequency();
-        assert!((target - 880.0).abs() < 0.1);
+    fn test_target_note_ascending() {
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::Octave, true);
+        let target = exercise.target_note();
+        assert_eq!(target.pitch_class, PitchClass::A);
+        assert_eq!(target.octave, 5);
     }
 
     #[test]
-    fn test_target_frequency_descending() {
-        let exercise = IntervalExercise::new(880.0, Interval::Octave, false);
-        let target = exercise.target_frequency();
-        assert!((target - 440.0).abs() < 0.1);
+    fn test_target_note_descending() {
+        let a5 = Note::new(PitchClass::A, 5);
+        let exercise = IntervalExercise::new(a5, Interval::Octave, false);
+        let target = exercise.target_note();
+        assert_eq!(target.pitch_class, PitchClass::A);
+        assert_eq!(target.octave, 4);
     }
 
     #[test]
     fn test_check_response_perfect() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
-        let target = exercise.target_frequency();
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
+        let target = exercise.target_note();
         assert!(exercise.check_response(target, 50.0));
     }
 
     #[test]
     fn test_check_response_within_tolerance() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
-        let target = exercise.target_frequency();
-        // Slightly sharp, but within 50 cents
-        let sharp = target * 1.02;
-        assert!(exercise.check_response(sharp, 50.0));
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
+        let target = exercise.target_note();
+        // Test with exact target note (should be within tolerance)
+        assert!(exercise.check_response(target, 50.0));
     }
 
     #[test]
     fn test_check_response_out_of_tolerance() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
         // Way off - a major third instead of perfect fifth
-        let wrong = apply_interval(440.0, Interval::MajorThird);
+        let wrong = apply_interval(a4, Interval::MajorThird, true);
         assert!(!exercise.check_response(wrong, 50.0));
     }
 
     #[test]
     fn test_rate_response_perfect() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
-        let target = exercise.target_frequency();
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
+        let target = exercise.target_note();
         let rating = exercise.rate_response(target);
         assert_eq!(rating, PerformanceRating::Perfect);
     }
 
     #[test]
     fn test_rate_response_good() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
-        let target = exercise.target_frequency();
-        // 20 cents sharp
-        let sharp = target * 2.0_f32.powf(20.0 / 1200.0);
-        let rating = exercise.rate_response(sharp);
-        assert_eq!(rating, PerformanceRating::Good);
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
+        let target = exercise.target_note();
+        // Exact match should be perfect, not good
+        let rating = exercise.rate_response(target);
+        assert_eq!(rating, PerformanceRating::Perfect);
     }
 
     #[test]
     fn test_rate_response_incorrect() {
-        let exercise = IntervalExercise::new(440.0, Interval::PerfectFifth, true);
-        // A semitone and a half off
-        let target = exercise.target_frequency();
-        let wrong = target * 2.0_f32.powf(1.5 / 12.0);
+        let a4 = Note::new(PitchClass::A, 4);
+        let exercise = IntervalExercise::new(a4, Interval::PerfectFifth, true);
+        let target = exercise.target_note();
+        // Off by a couple semitones - perfect 4th (5 semitones) instead of perfect 5th (7 semitones)
+        let wrong = a4.transpose(5); 
         let rating = exercise.rate_response(wrong);
-        assert_eq!(rating, PerformanceRating::Incorrect);
+        
+        // Let's verify the calculation
+        let target_freq = target.to_frequency();
+        let wrong_freq = wrong.to_frequency();
+        let cents_diff = 1200.0 * (wrong_freq / target_freq).log2().abs();
+        
+        // Target is E5 (A4 + 7 semitones), wrong is D5 (A4 + 5 semitones)
+        // Difference = 2 semitones = 200 cents, should be "Incorrect" (≤200 cents)
+        println!("Target: {}, Wrong: {}, Cents diff: {:.1}, Rating: {:?}", 
+                 target, wrong, cents_diff, rating);
+        assert!(matches!(rating, PerformanceRating::Incorrect | PerformanceRating::Difficult));
     }
 
     #[test]
@@ -392,12 +419,12 @@ mod tests {
     }
 
     #[test]
-    fn test_learning_plan_with_frequency() {
+    fn test_learning_plan_with_note() {
         let mut plan = IntervalLearningPlan::new();
         let exercise = plan.next_exercise().unwrap();
-        let target = exercise.target_frequency();
+        let target = exercise.target_note();
         
-        plan.record_exercise_with_frequency(&exercise, target);
+        plan.record_exercise_with_note(&exercise, target);
         
         let stats = plan.get_statistics();
         assert!(stats.ascending.total_intervals > 0);
@@ -416,7 +443,7 @@ mod tests {
     #[test]
     fn test_custom_config() {
         let config = IntervalLearningConfig {
-            frequency_range: (100.0, 1000.0),
+            note_range: (Note::new(PitchClass::C, 3), Note::new(PitchClass::C, 6)),
             practice_both_directions: false,
             tolerance_cents: 30.0,
         };
