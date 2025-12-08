@@ -6,7 +6,7 @@ mod audio_recorder;
 mod pitch_processor;
 
 use audio_recorder::AudioRecorder;
-use pitch_processor::{PitchProcessor, PitchResult, AudioChunk};
+use pitch_processor::PitchResult;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -27,9 +27,8 @@ struct PitchPerfecterApp {
     // Audio recording
     audio_recorder: Arc<Mutex<AudioRecorder>>,
     
-    // Pitch processing (runs on main thread)
-    pitch_processor: PitchProcessor,
-    audio_receiver: Receiver<AudioChunk>,
+    // Pitch results receiver (processing now runs on audio thread)
+    pitch_receiver: Receiver<PitchResult>,
     
     // UI state
     is_recording: bool,
@@ -49,15 +48,13 @@ struct PitchPerfecterApp {
 
 impl PitchPerfecterApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
-        let (_audio_tx, audio_rx) = channel();
+        let (_pitch_tx, pitch_rx) = channel();
         
         let audio_recorder = Arc::new(Mutex::new(AudioRecorder::new()));
-        let pitch_processor = PitchProcessor::new();
         
         Self {
             audio_recorder,
-            pitch_processor,
-            audio_receiver: audio_rx,
+            pitch_receiver: pitch_rx,
             is_recording: false,
             current_pitch: None,
             enable_bandpass: true,
@@ -71,13 +68,27 @@ impl PitchPerfecterApp {
     fn start_recording(&mut self) {
         let save_to_file = self.save_to_file;
         let save_path = self.save_path.clone();
+        let enable_bandpass = self.enable_bandpass;
+        let enable_spectral_gating = self.enable_spectral_gating;
         
-        // Get the sender from the receiver
-        let (audio_tx, audio_rx) = channel();
-        self.audio_receiver = audio_rx;
+        // Create a new channel for this recording session
+        let (pitch_tx, pitch_rx) = channel();
+        self.pitch_receiver = pitch_rx;
+        
+        // Detector parameters - same as in PitchProcessor
+        const WINDOW_SIZE: usize = 2048;
+        const HOP_SIZE: usize = 1024;
+        const POWER_THRESHOLD: f32 = 0.1;
+        const CLARITY_THRESHOLD: f32 = 0.7;
         
         let result = self.audio_recorder.lock().unwrap().start(
-            audio_tx,
+            pitch_tx,
+            POWER_THRESHOLD,
+            CLARITY_THRESHOLD,
+            WINDOW_SIZE,
+            HOP_SIZE,
+            enable_bandpass,
+            enable_spectral_gating,
             save_to_file,
             save_path,
         );
@@ -108,17 +119,10 @@ impl PitchPerfecterApp {
 
 impl eframe::App for PitchPerfecterApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Process audio chunks from the recording thread
-        while let Ok(audio_chunk) = self.audio_receiver.try_recv() {
-            let pitch_result = self.pitch_processor.process_audio_chunk(
-                audio_chunk.samples,
-                audio_chunk.sample_rate,
-                self.enable_bandpass,
-                self.enable_spectral_gating,
-            );
-            if let Some(result) = pitch_result {
-                self.current_pitch = Some(result);
-            }
+        // Receive pitch results from the audio thread
+        // Pitch detection now happens directly on the audio callback thread
+        while let Ok(pitch_result) = self.pitch_receiver.try_recv() {
+            self.current_pitch = Some(pitch_result);
         }
         
         // Request continuous repaint for real-time updates

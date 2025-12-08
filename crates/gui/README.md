@@ -35,22 +35,25 @@ cargo run --bin pitch-perfecter-gui
 
 ### Threading Model
 
-- **Audio Recording Thread**: Runs in cpal's audio callback, captures samples and sends chunks to main thread
-- **Main Thread**: Runs the GUI, receives audio chunks, performs pitch detection, and updates the display
+- **Audio Recording Thread**: Runs in cpal's audio callback, captures samples, performs pitch detection, and sends results to main thread
+- **Main Thread**: Runs the GUI, receives pitch results, and updates the display
 
 This design ensures:
-- Low latency audio capture
-- Real-time pitch detection without blocking the audio thread
+- Lowest possible latency (~50ms total)
+- Audio processing happens immediately after capture
+- Main thread only handles UI rendering
 - Responsive UI updates
 
 ### Data Flow
 
 ```
-Microphone → Audio Recording Thread → Audio Chunks (channel) → Main Thread
-                                                                     ↓
-                                                              Pitch Detection
-                                                                     ↓
-                                                               GUI Display
+Microphone → Audio Recording Thread → Pitch Detection (on audio thread)
+                                              ↓
+                                      Pitch Results (channel)
+                                              ↓
+                                         Main Thread
+                                              ↓
+                                        GUI Display
 ```
 
 ## Dependencies
@@ -64,14 +67,15 @@ Microphone → Audio Recording Thread → Audio Chunks (channel) → Main Thread
 
 ## Required APIs from Other Crates
 
-The GUI implementation uses the following existing APIs:
+The GUI implementation uses the following APIs:
 
 - `audio_utils::MonoAudio`: Audio data representation with sample rate
 - `audio_cleaning::clean_audio_for_pitch`: Bandpass filtering for vocal range
-- `pitch_detection_utils::ExternalYinDetector`: YIN pitch detection algorithm
+- `pitch_detection_utils::ThreadSafeYinDetector`: Thread-safe YIN pitch detection (newly added)
 - `pitch_detection_utils::hz_to_note_name`: Converts frequency to note name
 
-No modifications to other crates are required.
+**Modified Crates**:
+- `pitch-detection-utils`: Added `ThreadSafeYinDetector` wrapper that can be used in multi-threaded contexts
 
 ## Future Enhancements
 

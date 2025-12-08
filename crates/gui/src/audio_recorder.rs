@@ -3,7 +3,8 @@ use cpal::{Device, Stream, StreamConfig, Sample};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
 
-use crate::pitch_processor::AudioChunk;
+use crate::pitch_processor::{PitchProcessor, PitchResult};
+use pitch_detection_utils::ThreadSafeYinDetector;
 
 const BUFFER_SIZE: usize = 4096;
 
@@ -20,7 +21,13 @@ impl AudioRecorder {
     
     pub fn start(
         &mut self,
-        audio_sender: Sender<AudioChunk>,
+        pitch_sender: Sender<PitchResult>,
+        power_threshold: f32,
+        clarity_threshold: f32,
+        window_size: usize,
+        hop_size: usize,
+        enable_bandpass: bool,
+        enable_spectral_gating: bool,
         save_to_file: bool,
         save_path: String,
     ) -> Result<(), String> {
@@ -42,21 +49,39 @@ impl AudioRecorder {
             cpal::SampleFormat::F32 => self.build_stream::<f32>(
                 &device,
                 &config.into(),
-                audio_sender,
+                pitch_sender,
+                power_threshold,
+                clarity_threshold,
+                window_size,
+                hop_size,
+                enable_bandpass,
+                enable_spectral_gating,
                 save_to_file,
                 save_path,
             )?,
             cpal::SampleFormat::I16 => self.build_stream::<i16>(
                 &device,
                 &config.into(),
-                audio_sender,
+                pitch_sender,
+                power_threshold,
+                clarity_threshold,
+                window_size,
+                hop_size,
+                enable_bandpass,
+                enable_spectral_gating,
                 save_to_file,
                 save_path,
             )?,
             cpal::SampleFormat::U16 => self.build_stream::<u16>(
                 &device,
                 &config.into(),
-                audio_sender,
+                pitch_sender,
+                power_threshold,
+                clarity_threshold,
+                window_size,
+                hop_size,
+                enable_bandpass,
+                enable_spectral_gating,
                 save_to_file,
                 save_path,
             )?,
@@ -81,7 +106,13 @@ impl AudioRecorder {
         &self,
         device: &Device,
         config: &StreamConfig,
-        audio_sender: Sender<AudioChunk>,
+        pitch_sender: Sender<PitchResult>,
+        power_threshold: f32,
+        clarity_threshold: f32,
+        window_size: usize,
+        hop_size: usize,
+        enable_bandpass: bool,
+        enable_spectral_gating: bool,
         save_to_file: bool,
         save_path: String,
     ) -> Result<Stream, String>
@@ -123,6 +154,23 @@ impl AudioRecorder {
         let stream = device.build_input_stream(
             config,
             move |data: &[T], _: &cpal::InputCallbackInfo| {
+                // Create detector locally in the audio thread
+                // This avoids Send issues with Rc in the detector
+                thread_local! {
+                    static DETECTOR: std::cell::RefCell<Option<ThreadSafeYinDetector>> = std::cell::RefCell::new(None);
+                }
+                
+                DETECTOR.with(|detector_cell| {
+                    let mut detector = detector_cell.borrow_mut();
+                    if detector.is_none() {
+                        *detector = Some(ThreadSafeYinDetector::new(
+                            power_threshold,
+                            clarity_threshold,
+                            window_size,
+                            hop_size,
+                        ));
+                    }
+                    let detector = detector.as_mut().unwrap();
                 // Convert samples to f32 and mix to mono
                 let mono_samples: Vec<f32> = if channels == 1 {
                     data.iter()
@@ -149,23 +197,29 @@ impl AudioRecorder {
                     }
                 }
                 
-                // Add to buffer
-                if let Ok(mut buffer) = buffer_clone.lock() {
-                    buffer.extend_from_slice(&mono_samples);
-                    
-                    // Process when we have enough samples
-                    if buffer.len() >= BUFFER_SIZE {
-                        // Take the samples for processing
-                        let samples_to_process: Vec<f32> = buffer.drain(..).collect();
+                    // Add to buffer
+                    if let Ok(mut buffer) = buffer_clone.lock() {
+                        buffer.extend_from_slice(&mono_samples);
                         
-                        // Send to main thread for processing
-                        let chunk = AudioChunk {
-                            samples: samples_to_process,
-                            sample_rate,
-                        };
-                        let _ = audio_sender.send(chunk);
+                        // Process when we have enough samples
+                        if buffer.len() >= BUFFER_SIZE {
+                            // Take the samples for processing
+                            let samples_to_process: Vec<f32> = buffer.drain(..).collect();
+                            
+                            // Process pitch detection directly on audio thread
+                            if let Some(pitch_result) = PitchProcessor::process_audio_chunk(
+                                detector,
+                                samples_to_process,
+                                sample_rate,
+                                enable_bandpass,
+                                enable_spectral_gating,
+                            ) {
+                                // Send result to main thread
+                                let _ = pitch_sender.send(pitch_result);
+                            }
+                        }
                     }
-                }
+                });
             },
             err_fn,
             None,

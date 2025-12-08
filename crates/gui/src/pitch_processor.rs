@@ -1,9 +1,8 @@
 use audio_utils::MonoAudio;
 use audio_cleaning::clean_audio_for_pitch;
-use pitch_detection_utils::{ExternalYinDetector, MonoPitchDetector, hz_to_note_name};
+use pitch_detection_utils::{ThreadSafeYinDetector, MonoPitchDetector, hz_to_note_name};
 
 const WINDOW_SIZE: usize = 2048;
-const HOP_SIZE: usize = 1024;
 
 #[derive(Debug, Clone)]
 pub struct PitchResult {
@@ -12,30 +11,13 @@ pub struct PitchResult {
     pub clarity: f32,
 }
 
-#[derive(Debug, Clone)]
-pub struct AudioChunk {
-    pub samples: Vec<f32>,
-    pub sample_rate: u32,
-}
-
-pub struct PitchProcessor {
-    detector: ExternalYinDetector,
-}
+pub struct PitchProcessor;
 
 impl PitchProcessor {
-    pub fn new() -> Self {
-        // Create YIN detector with reasonable parameters
-        // threshold: 0.1 (lower is more strict)
-        // confidence_threshold: 0.7 (0-1, higher means more confident)
-        let detector = ExternalYinDetector::new(0.1, 0.7, WINDOW_SIZE, HOP_SIZE);
-        
-        Self {
-            detector,
-        }
-    }
-    
+    /// Process an audio chunk and return pitch detection result.
+    /// This is a static method that can be called from any thread.
     pub fn process_audio_chunk(
-        &mut self,
+        detector: &mut ThreadSafeYinDetector,
         samples: Vec<f32>,
         sample_rate: u32,
         enable_bandpass: bool,
@@ -60,7 +42,7 @@ impl PitchProcessor {
         };
         
         // Detect pitch
-        if let Some(pitch) = self.detector.get_mono_pitch(processed_audio) {
+        if let Some(pitch) = detector.get_mono_pitch(processed_audio) {
             let note_name = hz_to_note_name(pitch.frequency);
             
             Some(PitchResult {

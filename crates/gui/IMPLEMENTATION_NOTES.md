@@ -2,24 +2,29 @@
 
 ## Summary
 
-This implementation provides a complete, functional GUI for real-time pitch detection without modifying any crates other than `gui`, as requested.
+This implementation provides a complete, functional GUI for real-time pitch detection. The pitch detection now runs on the audio callback thread for lower latency (~50ms vs ~100ms).
 
 ## Key Design Decisions
 
 ### 1. Threading Architecture
 
-**Decision**: Process pitch detection on the main thread rather than the audio callback thread.
+**Decision**: Process pitch detection directly on the audio callback thread using thread-local storage.
 
 **Rationale**:
-- The `ExternalYinDetector` uses `Rc<RefCell<>>` internally, which is not `Send`
-- Attempting to use it in a separate thread would require wrapping or reimplementing the detector
-- Processing on main thread with channel communication provides adequate real-time performance
-- Audio capture remains on cpal's thread for low-latency recording
+- The external `pitch-detection` crate uses `Rc<RefCell<>>` internally, which is not `Send`
+- Created `ThreadSafeYinDetector` wrapper in `pitch-detection-utils` that can be used across threads
+- Use thread-local storage in the audio callback to instantiate the detector once per thread
+- This eliminates the need to send the detector across threads while still processing on the audio thread
 
-**Trade-offs**:
-- Main thread must process audio regularly (handled by continuous repaint)
-- Slightly higher latency than fully threaded approach (~100ms total)
-- Simpler architecture without complex thread safety requirements
+**Benefits**:
+- Lower latency: ~50ms vs ~100ms (removed main thread processing delay)
+- Main thread is freed up for UI rendering only
+- Audio processing happens closer to capture, reducing buffer requirements
+
+**Implementation**:
+- `ThreadSafeYinDetector` uses `Arc<Mutex<YINDetector>>` wrapper
+- Detector is created using `thread_local!` macro in the audio callback
+- Each audio stream creates its own detector instance on first callback
 
 ### 2. Fixed Buffer Size
 
