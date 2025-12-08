@@ -77,6 +77,53 @@ let filtered = bandpass_vocal_range(
 );
 ```
 
+### Direct Spectral Gating (Advanced)
+
+For more control over spectral gating, use the dedicated `spectral_gating` module:
+
+```rust
+use audio_cleaning::{SpectralGate, SpectralGateConfig, Spectrum};
+
+// Create a noise profile from a quiet section
+let noise_samples = vec![/* quiet section of audio */];
+let noise_profile = Spectrum::from_waveform(&noise_samples);
+
+// Configure the spectral gate
+let config = SpectralGateConfig {
+    noise_threshold_db: 6.0,   // 6 dB threshold
+    smoothing_window: 3,        // Smooth across 3 frequency bins
+};
+
+// Create the gate
+let gate = SpectralGate::new(noise_profile, config);
+
+// Process audio (can be called multiple times for streaming)
+let audio_samples = vec![/* your audio samples */];
+let cleaned = gate.process(&audio_samples);
+
+// Update noise profile for adaptive gating
+let new_noise = Spectrum::from_waveform(&new_noise_samples);
+gate.update_noise_profile(new_noise);
+```
+
+### Real-time/Streaming Processing
+
+The spectral gate is designed for real-time applications:
+
+```rust
+use audio_cleaning::{SpectralGate, Spectrum};
+
+let noise_profile = Spectrum::from_waveform(&initial_noise);
+let gate = SpectralGate::with_defaults(noise_profile);
+
+// Process chunks as they arrive from a microphone
+loop {
+    let chunk = get_audio_chunk(); // Fixed-size chunks (e.g., 1024 samples)
+    let cleaned_chunk = gate.process(&chunk);
+    output_audio(&cleaned_chunk);
+}
+```
+
 ### Spectral Analysis
 
 Compute frequency spectrum and spectrogram:
@@ -139,18 +186,44 @@ The crate supports two noise reduction approaches:
 - `estimate_noise_spectrum(&MonoAudio) -> Option<Spectrum>`
   - Automatically detect and profile background noise
 
+- `apply_spectral_gating(&[f32], Spectrum, Option<f32>) -> Vec<f32>`
+  - One-shot spectral gating function (convenience wrapper)
+
+### Spectral Gating Module
+
+- `SpectralGate::new(Spectrum, SpectralGateConfig) -> SpectralGate`
+  - Create a spectral gate with custom configuration
+  
+- `SpectralGate::with_defaults(Spectrum) -> SpectralGate`
+  - Create a spectral gate with default settings
+
+- `SpectralGate::process(&[f32]) -> Vec<f32>`
+  - Process audio through the gate (suitable for streaming)
+
+- `SpectralGate::update_noise_profile(Spectrum)`
+  - Update the noise profile for adaptive gating
+
+- `SpectralGate::update_config(SpectralGateConfig)`
+  - Update gate configuration parameters
+
 ### Types
 
 - `Spectrum`: FFT spectrum with ability to invert back to time domain
 - `Spectrogram`: Time-frequency representation of a signal
 - `SpectrogramConfig`: Configuration for spectrogram computation
+- `SpectralGate`: Stateful spectral gate for noise reduction
+- `SpectralGateConfig`: Configuration for spectral gating
+  - `noise_threshold_db`: Threshold in dB below noise floor
+  - `smoothing_window`: Number of bins for smoothing
 
 ## Performance Considerations
 
 - FFT operations are O(N log N) where N is the number of samples
 - Bandpass filtering processes samples sequentially (O(N))
 - Spectral gating requires FFT + IFFT (more expensive but higher quality)
-- For real-time applications, consider using bandpass filtering only
+- `SpectralGate` is designed for real-time use with fixed-size chunks
+- FFT planner is cached per-thread for improved performance
+- For lowest latency, use bandpass filtering; for best quality, use spectral gating
 
 ## Current Limitations
 
