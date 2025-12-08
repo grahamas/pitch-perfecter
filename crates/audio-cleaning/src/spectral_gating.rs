@@ -88,6 +88,7 @@ impl Default for SpectralGateConfig {
 /// while preserving the desired signal.
 pub struct SpectralGate {
     noise_spectrum: Spectrum,
+    noise_magnitudes: Vec<f32>,
     config: SpectralGateConfig,
 }
 
@@ -101,8 +102,10 @@ impl SpectralGate {
     /// # Returns
     /// A new `SpectralGate` instance
     pub fn new(noise_spectrum: Spectrum, config: SpectralGateConfig) -> Self {
+        let noise_magnitudes = Self::compute_noise_magnitudes_static(&noise_spectrum, &config);
         Self {
             noise_spectrum,
+            noise_magnitudes,
             config,
         }
     }
@@ -148,10 +151,8 @@ impl SpectralGate {
 
     /// Apply gating to a spectrum in-place
     fn apply_gate(&self, spectrum: &mut Spectrum, threshold_multiplier: f32) {
-        let noise_magnitudes = self.compute_noise_magnitudes();
-        
         for (i, complex_sample) in spectrum.complex.iter_mut().enumerate() {
-            let noise_level = noise_magnitudes.get(i).copied().unwrap_or(0.0);
+            let noise_level = self.noise_magnitudes.get(i).copied().unwrap_or(0.0);
             let signal_magnitude = complex_sample.norm();
             
             // Attenuation threshold
@@ -173,22 +174,22 @@ impl SpectralGate {
     }
 
     /// Compute magnitude spectrum from noise profile with optional smoothing
-    fn compute_noise_magnitudes(&self) -> Vec<f32> {
-        let magnitudes: Vec<f32> = self.noise_spectrum.complex
+    fn compute_noise_magnitudes_static(noise_spectrum: &Spectrum, config: &SpectralGateConfig) -> Vec<f32> {
+        let magnitudes: Vec<f32> = noise_spectrum.complex
             .iter()
             .map(|c| c.norm())
             .collect();
 
-        if self.config.smoothing_window <= 1 {
+        if config.smoothing_window <= 1 {
             return magnitudes;
         }
 
         // Apply moving average smoothing
-        self.smooth_magnitudes(&magnitudes, self.config.smoothing_window)
+        Self::smooth_magnitudes(&magnitudes, config.smoothing_window)
     }
 
     /// Apply moving average smoothing to magnitude spectrum
-    fn smooth_magnitudes(&self, magnitudes: &[f32], window_size: usize) -> Vec<f32> {
+    fn smooth_magnitudes(magnitudes: &[f32], window_size: usize) -> Vec<f32> {
         let mut smoothed = Vec::with_capacity(magnitudes.len());
         let half_window = window_size / 2;
 
@@ -210,6 +211,7 @@ impl SpectralGate {
     /// # Arguments
     /// * `noise_spectrum` - New noise profile
     pub fn update_noise_profile(&mut self, noise_spectrum: Spectrum) {
+        self.noise_magnitudes = Self::compute_noise_magnitudes_static(&noise_spectrum, &self.config);
         self.noise_spectrum = noise_spectrum;
     }
 
@@ -225,6 +227,7 @@ impl SpectralGate {
 
     /// Update the configuration
     pub fn update_config(&mut self, config: SpectralGateConfig) {
+        self.noise_magnitudes = Self::compute_noise_magnitudes_static(&self.noise_spectrum, &config);
         self.config = config;
     }
 }
@@ -234,44 +237,6 @@ impl SpectralGate {
 /// Formula: linear = 10^(db/20)
 fn db_to_linear(db: f32) -> f32 {
     10.0_f32.powf(db / 20.0)
-}
-
-/// Convert linear scale to decibels
-///
-/// Formula: db = 20 * log10(linear)
-fn linear_to_db(linear: f32) -> f32 {
-    20.0 * linear.log10()
-}
-
-/// Apply spectral gating using a recorded noise spectrum
-///
-/// This is a convenience function that wraps `SpectralGate` for one-time processing.
-/// For multiple operations, consider creating a `SpectralGate` instance directly.
-///
-/// # Arguments
-/// * `samples` - Input audio samples
-/// * `noise_spectrum` - Reference noise spectrum to gate against
-/// * `noise_threshold` - Optional threshold multiplier (default: 1.2, equivalent to ~1.6 dB)
-///
-/// # Returns
-/// Noise-gated audio samples
-pub fn apply_spectral_gating(
-    samples: &[f32],
-    noise_spectrum: Spectrum,
-    noise_threshold: Option<f32>,
-) -> Vec<f32> {
-    let threshold_multiplier = noise_threshold.unwrap_or(1.2);
-    
-    // Convert linear threshold to dB for consistency
-    let threshold_db = linear_to_db(threshold_multiplier);
-    
-    let config = SpectralGateConfig {
-        noise_threshold_db: threshold_db,
-        smoothing_window: 1,
-    };
-    
-    let gate = SpectralGate::new(noise_spectrum, config);
-    gate.process(samples)
 }
 
 #[cfg(test)]
@@ -357,18 +322,6 @@ mod tests {
     }
 
     #[test]
-    fn test_linear_to_db_conversion() {
-        // 1.0 linear = 0 dB
-        assert!((linear_to_db(1.0) - 0.0).abs() < 1e-6);
-        
-        // 2.0 linear = ~6 dB
-        assert!((linear_to_db(2.0) - 6.0).abs() < 0.1);
-        
-        // 0.5 linear = ~-6 dB
-        assert!((linear_to_db(0.5) + 6.0).abs() < 0.1);
-    }
-
-    #[test]
     fn test_update_noise_profile() {
         let noise1 = Spectrum::from_waveform(&vec![0.01; 4]);
         let noise2 = Spectrum::from_waveform(&vec![0.02; 4]);
@@ -394,17 +347,6 @@ mod tests {
         
         assert_eq!(gate.config().noise_threshold_db, 12.0);
         assert_eq!(gate.config().smoothing_window, 5);
-    }
-
-    #[test]
-    fn test_apply_spectral_gating_function() {
-        let noise_samples = vec![0.01; 8];
-        let noise = Spectrum::from_waveform(&noise_samples);
-        
-        let input = vec![0.1, 0.2, -0.1, 0.05];
-        let result = apply_spectral_gating(&input, noise, Some(1.5));
-        
-        assert_eq!(result.len(), input.len());
     }
 
     #[test]
