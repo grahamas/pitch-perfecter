@@ -182,12 +182,10 @@ impl MicrophoneRecorder {
     /// * `Err(RecordingError)` - Error stopping or retrieving the audio
     pub fn stop(mut self) -> Result<MonoAudio, RecordingError> {
         // Pause the stream before dropping to avoid ALSA panic
-        if let Some(stream) = &self.stream {
+        if let Some(stream) = self.stream.take() {
             let _ = stream.pause();
+            drop(stream);
         }
-        
-        // Drop the stream to stop recording
-        self.stream.take();
         
         // Extract samples
         let recorded_samples = self.samples.lock()
