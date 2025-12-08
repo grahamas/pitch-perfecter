@@ -5,6 +5,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 thread_local! {
+    static FFT_PLANNER: RefCell<FftPlanner<f32>> = 
+        RefCell::new(FftPlanner::new());
     static FFT_CACHE: RefCell<HashMap<usize, Arc<dyn Fft<f32>>>> = 
         RefCell::new(HashMap::new());
     static IFFT_CACHE: RefCell<HashMap<usize, Arc<dyn Fft<f32>>>> = 
@@ -32,16 +34,18 @@ impl Spectrum {
 
     /// Invert the spectrum back to the time domain (real part only)
     pub fn to_time_domain(&self) -> Vec<f32> {
+        let mut buffer = self.complex.clone();
         IFFT_CACHE.with(|cache| {
-            let mut buffer = self.complex.clone();
             let mut cache_map = cache.borrow_mut();
-            let ifft = cache_map.entry(self.n).or_insert_with(|| {
-                let mut planner = FftPlanner::new();
-                planner.plan_fft(self.n, FftDirection::Inverse)
-            });
-            ifft.process(&mut buffer);
-            buffer.iter().map(|c| c.re / self.n as f32).collect()
-        })
+            if !cache_map.contains_key(&self.n) {
+                FFT_PLANNER.with(|planner| {
+                    let mut planner = planner.borrow_mut();
+                    cache_map.insert(self.n, planner.plan_fft(self.n, FftDirection::Inverse));
+                });
+            }
+            cache_map[&self.n].process(&mut buffer);
+        });
+        buffer.iter().map(|c| c.re / self.n as f32).collect()
     }
 
     // Get the complex value at index i
@@ -51,16 +55,18 @@ impl Spectrum {
 }
 
 fn compute_spectrum(signal: &[f32], n_fft: usize) -> Vec<Complex<f32>> {
+    let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
     FFT_CACHE.with(|cache| {
         let mut cache_map = cache.borrow_mut();
-        let fft = cache_map.entry(n_fft).or_insert_with(|| {
-            let mut planner = FftPlanner::new();
-            planner.plan_fft_forward(n_fft)
-        });
-        let mut buffer: Vec<Complex<f32>> = signal.iter().map(|&x| Complex::new(x, 0.0)).collect();
-        fft.process(&mut buffer);
-        buffer
-    })
+        if !cache_map.contains_key(&n_fft) {
+            FFT_PLANNER.with(|planner| {
+                let mut planner = planner.borrow_mut();
+                cache_map.insert(n_fft, planner.plan_fft_forward(n_fft));
+            });
+        }
+        cache_map[&n_fft].process(&mut buffer);
+    });
+    buffer
 }
 
 // TODO add frequency axis
