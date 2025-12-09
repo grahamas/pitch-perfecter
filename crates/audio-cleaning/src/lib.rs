@@ -17,7 +17,7 @@ pub mod spectral_gating;
 pub use types::{Spectrum, Spectrogram, SpectrogramConfig};
 pub use cleaning::{
     bandpass_vocal_range, clean_signal_for_pitch, clean_audio_for_pitch,
-    estimate_noise_spectrum, DEFAULT_VOCAL_LOW_HZ, DEFAULT_VOCAL_HIGH_HZ,
+    estimate_noise_spectrum, create_noise_profile, DEFAULT_VOCAL_LOW_HZ, DEFAULT_VOCAL_HIGH_HZ,
 };
 pub use processing::find_peak;
 pub use spectral_gating::{SpectralGate, SpectralGateConfig};
