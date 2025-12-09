@@ -99,6 +99,8 @@ impl AudioRecorder {
         if let Some(stream) = self.stream.take() {
             // Pause the stream before dropping to avoid ALSA panic
             let _ = stream.pause();
+            // Give ALSA time to process the pause command
+            std::thread::sleep(std::time::Duration::from_millis(10));
             drop(stream);
         }
         Ok(())
@@ -228,5 +230,17 @@ impl AudioRecorder {
         ).map_err(|e| format!("Failed to build input stream: {}", e))?;
         
         Ok(stream)
+    }
+}
+
+impl Drop for AudioRecorder {
+    fn drop(&mut self) {
+        // Ensure stream is properly paused before dropping
+        if let Some(stream) = self.stream.take() {
+            let _ = stream.pause();
+            // Give ALSA time to process the pause command
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            drop(stream);
+        }
     }
 }

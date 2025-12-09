@@ -184,6 +184,8 @@ impl MicrophoneRecorder {
         // Pause the stream before dropping to avoid ALSA panic
         if let Some(stream) = self.stream.take() {
             let _ = stream.pause();
+            // Give ALSA time to process the pause command
+            std::thread::sleep(std::time::Duration::from_millis(10));
             drop(stream);
         }
         
@@ -220,6 +222,18 @@ impl MicrophoneRecorder {
     /// perfectly reflect the actual hardware state.
     pub fn is_recording(&self) -> bool {
         self.stream.is_some()
+    }
+}
+
+impl Drop for MicrophoneRecorder {
+    fn drop(&mut self) {
+        // Ensure stream is properly paused before dropping
+        if let Some(stream) = self.stream.take() {
+            let _ = stream.pause();
+            // Give ALSA time to process the pause command
+            std::thread::sleep(std::time::Duration::from_millis(10));
+            drop(stream);
+        }
     }
 }
 
@@ -292,6 +306,8 @@ pub fn record_from_microphone(duration_secs: f32) -> Result<MonoAudio, Recording
     
     // Pause the stream before dropping to avoid ALSA panic
     let _ = stream.pause();
+    // Give ALSA time to process the pause command
+    std::thread::sleep(std::time::Duration::from_millis(10));
     
     // Stop recording
     drop(stream);
