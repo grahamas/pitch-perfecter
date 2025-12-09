@@ -88,15 +88,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     // Generate a 440 Hz sine wave with added noise
     use std::f32::consts::PI;
+    use rand::Rng;
+    
     let frequency = 440.0; // A4 note
     let signal_amplitude = 0.3;
+    let mut rng = rand::rng();
     
     let test_signal: Vec<f32> = (0..num_samples)
         .map(|i| {
             let t = i as f32 / sample_rate;
             let clean_signal = signal_amplitude * (2.0 * PI * frequency * t).sin();
             // Add noise similar to recorded noise level
-            let noise = (noise_rms * 2.0) * (rand_f32() - 0.5);
+            let noise = (noise_rms * 2.0) * (rng.random::<f32>() - 0.5);
             clean_signal + noise
         })
         .collect();
@@ -151,19 +154,4 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     println!("✓ Demo complete!");
 
     Ok(())
-}
-
-// Simple pseudo-random number generator for demonstration
-fn rand_f32() -> f32 {
-    use std::cell::Cell;
-    thread_local! {
-        static SEED: Cell<u32> = Cell::new(12345);
-    }
-    
-    SEED.with(|seed| {
-        let mut s = seed.get();
-        s = s.wrapping_mul(1103515245).wrapping_add(12345);
-        seed.set(s);
-        ((s / 65536) % 32768) as f32 / 32768.0
-    })
 }
