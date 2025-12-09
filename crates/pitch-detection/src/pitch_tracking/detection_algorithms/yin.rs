@@ -166,4 +166,73 @@ mod tests {
         // Should return None for signal below power threshold
         assert!(pitch.is_none(), "Expected None for very quiet audio");
     }
+
+    #[test]
+    fn test_threadsafe_yin_detector_sine_wave() {
+        // Generate a 440 Hz sine wave
+        let sample_rate = 8000;
+        let freq = 440.0;
+        let n = 1024;
+        let signal: Vec<f32> = (0..n)
+            .map(|i| (2.0 * std::f32::consts::PI * freq * i as f32 / sample_rate as f32).sin())
+            .collect();
+        let audio = MonoAudio { samples: signal, sample_rate };
+        let mut detector = ThreadSafeYinDetector::new(0.1, 0.9, n, n/2);
+        let pitch = detector.get_mono_pitch(audio);
+        assert!(pitch.is_some());
+        let pitch = pitch.unwrap();
+        // Should be close to 440 Hz
+        assert!((pitch.frequency - 440.0).abs() < 10.0, "Detected: {}", pitch.frequency);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion `left == right` failed")]
+    fn test_threadsafe_yin_detector_empty_signal() {
+        // BUG: The YINDetector panics when signal length doesn't match window_size
+        // This test documents the bug - it should return None instead of panicking
+        let sample_rate = 8000;
+        let signal: Vec<f32> = vec![];
+        let audio = MonoAudio { samples: signal, sample_rate };
+        let mut detector = ThreadSafeYinDetector::new(0.1, 0.9, 1024, 512);
+        let _pitch = detector.get_mono_pitch(audio);
+    }
+
+    #[test]
+    #[should_panic(expected = "assertion `left == right` failed")]
+    fn test_threadsafe_yin_detector_signal_shorter_than_window() {
+        // BUG: The YINDetector panics when signal length doesn't match window_size
+        // This test documents the bug - it should return None instead of panicking
+        let sample_rate = 8000;
+        let window_size = 1024;
+        let signal: Vec<f32> = vec![0.1, 0.2, 0.3, 0.4, 0.5]; // Only 5 samples
+        let audio = MonoAudio { samples: signal, sample_rate };
+        let mut detector = ThreadSafeYinDetector::new(0.1, 0.9, window_size, window_size / 2);
+        let _pitch = detector.get_mono_pitch(audio);
+    }
+
+    #[test]
+    fn test_threadsafe_yin_detector_silent_audio() {
+        // Test with silent audio (all zeros)
+        let sample_rate = 8000;
+        let n = 1024;
+        let signal: Vec<f32> = vec![0.0; n];
+        let audio = MonoAudio { samples: signal, sample_rate };
+        let mut detector = ThreadSafeYinDetector::new(0.1, 0.9, n, n/2);
+        let pitch = detector.get_mono_pitch(audio);
+        // Should return None for silent audio (below power threshold)
+        assert!(pitch.is_none(), "Expected None for silent audio");
+    }
+
+    #[test]
+    fn test_threadsafe_yin_detector_very_quiet_audio() {
+        // Test with very quiet audio below power threshold
+        let sample_rate = 8000;
+        let n = 1024;
+        let signal: Vec<f32> = vec![0.001; n]; // Very quiet constant signal
+        let audio = MonoAudio { samples: signal, sample_rate };
+        let mut detector = ThreadSafeYinDetector::new(0.1, 0.9, n, n/2);
+        let pitch = detector.get_mono_pitch(audio);
+        // Should return None for signal below power threshold
+        assert!(pitch.is_none(), "Expected None for very quiet audio");
+    }
 }
