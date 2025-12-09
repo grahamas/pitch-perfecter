@@ -240,17 +240,14 @@ impl MicrophoneRecorder {
 /// # Examples
 /// ```no_run
 /// use audio_utils::recording::record_noise_from_microphone;
-/// use audio_cleaning::{Spectrum, SpectralGate};
 ///
 /// // Record 2 seconds of background noise
 /// println!("Recording background noise... Please remain silent.");
 /// let noise = record_noise_from_microphone(2.0).expect("Failed to record noise");
+/// println!("Recorded {} samples at {} Hz", noise.samples.len(), noise.sample_rate);
 ///
-/// // Create a noise profile for spectral gating
-/// let noise_profile = Spectrum::from_waveform(&noise.samples);
-/// let gate = SpectralGate::with_defaults(noise_profile);
-///
-/// // Now use the gate to process audio...
+/// // The recorded noise can then be used to create a noise profile
+/// // for spectral gating (see audio-cleaning crate documentation)
 /// ```
 ///
 /// # Tips for Best Results
