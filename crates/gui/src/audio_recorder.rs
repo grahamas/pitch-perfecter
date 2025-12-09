@@ -7,8 +7,6 @@ use std::time::Duration;
 use crate::pitch_processor::{PitchProcessor, PitchResult};
 use pitch_detection_utils::ThreadSafeYinDetector;
 
-const BUFFER_SIZE: usize = 4096;
-
 /// Delay in milliseconds to wait after pausing a stream before dropping it.
 /// This gives ALSA time to process the pause command and transition to a stable state.
 const ALSA_PAUSE_DELAY_MS: u64 = 10;
@@ -215,10 +213,11 @@ impl AudioRecorder {
                     if let Ok(mut buffer) = buffer_clone.lock() {
                         buffer.extend_from_slice(&mono_samples);
                         
-                        // Process when we have enough samples
-                        if buffer.len() >= BUFFER_SIZE {
-                            // Take the samples for processing
-                            let samples_to_process: Vec<f32> = buffer.drain(..).collect();
+                        // Process when we have enough samples for pitch detection
+                        // Use window_size instead of BUFFER_SIZE to match detector expectations
+                        while buffer.len() >= window_size {
+                            // Take exactly window_size samples for processing
+                            let samples_to_process: Vec<f32> = buffer.drain(..window_size).collect();
                             
                             // Process pitch detection directly on audio thread
                             if let Some(pitch_result) = PitchProcessor::process_audio_chunk(
