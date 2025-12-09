@@ -7,6 +7,11 @@
 use crate::audio::MonoAudio;
 use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
+
+/// Delay in milliseconds to wait after pausing a stream before dropping it.
+/// This gives ALSA time to process the pause command and transition to a stable state.
+const ALSA_PAUSE_DELAY_MS: u64 = 10;
 
 /// Error type for audio recording operations
 #[derive(Debug)]
@@ -181,12 +186,9 @@ impl MicrophoneRecorder {
     /// * `Ok(MonoAudio)` - Successfully recorded audio
     /// * `Err(RecordingError)` - Error stopping or retrieving the audio
     pub fn stop(mut self) -> Result<MonoAudio, RecordingError> {
-        // Pause the stream before dropping to avoid ALSA panic
+        // Cleanup stream safely to avoid ALSA panic
         if let Some(stream) = self.stream.take() {
-            let _ = stream.pause();
-            // Give ALSA time to process the pause command
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            drop(stream);
+            Self::cleanup_stream(stream);
         }
         
         // Extract samples
@@ -223,16 +225,22 @@ impl MicrophoneRecorder {
     pub fn is_recording(&self) -> bool {
         self.stream.is_some()
     }
+    
+    /// Helper method to safely cleanup a stream by pausing it and waiting before dropping.
+    /// This prevents ALSA panics by giving the backend time to process the pause command.
+    fn cleanup_stream(stream: cpal::Stream) {
+        let _ = stream.pause();
+        // Give ALSA time to process the pause command
+        std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+        drop(stream);
+    }
 }
 
 impl Drop for MicrophoneRecorder {
     fn drop(&mut self) {
-        // Ensure stream is properly paused before dropping
+        // Ensure stream is properly cleaned up even if stop() wasn't called
         if let Some(stream) = self.stream.take() {
-            let _ = stream.pause();
-            // Give ALSA time to process the pause command
-            std::thread::sleep(std::time::Duration::from_millis(10));
-            drop(stream);
+            Self::cleanup_stream(stream);
         }
     }
 }
@@ -307,7 +315,7 @@ pub fn record_from_microphone(duration_secs: f32) -> Result<MonoAudio, Recording
     // Pause the stream before dropping to avoid ALSA panic
     let _ = stream.pause();
     // Give ALSA time to process the pause command
-    std::thread::sleep(std::time::Duration::from_millis(10));
+    std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
     
     // Stop recording
     drop(stream);
