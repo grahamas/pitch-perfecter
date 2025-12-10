@@ -40,10 +40,15 @@ pub mod note;
 pub mod intervals;
 pub mod spaced_repetition;
 pub mod interval_learning;
+pub mod persistence;
 
 pub use note::{Note, PitchClass};
 pub use intervals::{Interval, apply_interval, calculate_interval_semitones, closest_interval};
 pub use spaced_repetition::{PerformanceRating, ReviewItem, SpacedRepetitionScheduler};
 pub use interval_learning::{
     IntervalExercise, IntervalLearningConfig, IntervalLearningPlan, LearningStatistics,
+};
+pub use persistence::{
+    save_learning_plan, load_learning_plan, learning_plan_exists, delete_learning_plan,
+    PersistenceError,
 };

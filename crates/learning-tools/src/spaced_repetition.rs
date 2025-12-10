@@ -4,9 +4,10 @@
 //! adapted for musical interval learning.
 
 use std::time::{Duration, SystemTime};
+use serde::{Deserialize, Serialize};
 
 /// Performance rating for an exercise attempt
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub enum PerformanceRating {
     /// Complete blackout (0)
     Blackout,
@@ -37,7 +38,7 @@ impl PerformanceRating {
 }
 
 /// Represents the state of a learning item in the spaced repetition system
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReviewItem<T> {
     /// The item being learned
     pub item: T,
@@ -109,7 +110,7 @@ impl<T> ReviewItem<T> {
 }
 
 /// Manages a collection of items for spaced repetition learning
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SpacedRepetitionScheduler<T> {
     items: Vec<ReviewItem<T>>,
 }

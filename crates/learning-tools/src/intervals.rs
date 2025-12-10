@@ -5,9 +5,10 @@
 
 use std::fmt;
 use crate::note::Note;
+use serde::{Deserialize, Serialize};
 
 /// Standard musical intervals
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Interval {
     /// Perfect unison (0 semitones)
     Unison,

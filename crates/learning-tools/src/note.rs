@@ -4,9 +4,10 @@
 //! as discrete pitch classes with octaves (e.g., A4, C#5, Bb3).
 
 use std::fmt;
+use serde::{Deserialize, Serialize};
 
 /// Represents a musical pitch class (C, C#, D, etc.)
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PitchClass {
     C,
     CSharp,
@@ -105,7 +106,7 @@ impl fmt::Display for PitchClass {
 }
 
 /// Represents a musical note with pitch class and octave
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct Note {
     pub pitch_class: PitchClass,
     pub octave: i32,
