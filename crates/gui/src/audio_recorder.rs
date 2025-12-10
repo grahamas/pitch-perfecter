@@ -7,23 +7,36 @@ use std::time::Duration;
 use crate::pitch_processor::{PitchProcessor, PitchResult};
 use pitch_detection_utils::ThreadSafeYinDetector;
 
-/// Initial delay in milliseconds to wait after pausing a stream before dropping it.
-/// This gives ALSA time to process the pause command and transition to a stable state.
-const ALSA_PAUSE_INITIAL_DELAY_MS: u64 = 5;
+/// Delay in milliseconds to wait after successfully pausing a stream before dropping it.
+/// 
+/// ALSA processes pause commands asynchronously. This delay gives ALSA time to complete
+/// the state transition before the stream is dropped, preventing panics.
+/// 
+/// Note: cpal does not provide a way to query stream state, so we cannot verify that the
+/// pause has completed. This is a conservative delay based on typical ALSA behavior.
+/// A longer delay is safer but introduces latency when stopping recording.
+const ALSA_PAUSE_DELAY_MS: u64 = 50;
 
-/// Maximum number of retry attempts when waiting for pause to complete.
-const ALSA_PAUSE_MAX_RETRIES: u32 = 5;
-
-/// Multiplier for exponential backoff between retry attempts.
-const ALSA_PAUSE_BACKOFF_MULTIPLIER: u64 = 2;
-
-/// Wait for a pause operation to complete using exponential backoff.
-/// This gives ALSA multiple chances to complete the state transition.
-fn await_pause_completion() {
-    let mut delay_ms = ALSA_PAUSE_INITIAL_DELAY_MS;
-    for _ in 0..ALSA_PAUSE_MAX_RETRIES {
-        std::thread::sleep(Duration::from_millis(delay_ms));
-        delay_ms *= ALSA_PAUSE_BACKOFF_MULTIPLIER;
+/// Attempt to pause a stream and wait for the pause to complete.
+/// 
+/// Since cpal doesn't expose stream state, we cannot actually verify that ALSA has
+/// completed processing the pause command. Instead, we:
+/// 1. Check that pause() succeeds (command was accepted)
+/// 2. Wait a conservative amount of time for ALSA to process it
+/// 
+/// Returns true if the pause command was successful and we waited appropriately.
+fn pause_and_await_completion(stream: &Stream) -> bool {
+    match stream.pause() {
+        Ok(()) => {
+            // Pause command was accepted by cpal, now wait for ALSA to process it
+            std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+            true
+        }
+        Err(e) => {
+            // Pause failed - log and indicate we didn't wait
+            eprintln!("Failed to pause stream: {}. Stream will be dropped immediately.", e);
+            false
+        }
     }
 }
 
@@ -123,14 +136,11 @@ impl AudioRecorder {
     
     /// Helper method to safely cleanup a stream by pausing it and waiting before dropping.
     /// This prevents ALSA panics by giving the backend time to process the pause command.
-    /// Uses exponential backoff to await pause completion rather than a fixed arbitrary delay.
     fn cleanup_stream(stream: Stream) {
-        // Attempt to pause the stream
-        let _ = stream.pause();
+        // Attempt to pause and wait for ALSA to process the command
+        pause_and_await_completion(&stream);
         
-        // Wait for pause to complete using exponential backoff
-        await_pause_completion();
-        
+        // Now it's safe to drop the stream
         drop(stream);
     }
     
