@@ -38,7 +38,7 @@ fn main() {
     let noise_amplitude = 0.3; // Moderate noise level
     let noisy_samples: Vec<f32> = clean_signal
         .iter()
-        .map(|&sample| sample + noise_amplitude * (rng.gen::<f32>() - 0.5))
+        .map(|&sample| sample + noise_amplitude * (rng.random::<f32>() - 0.5))
         .collect();
     let noisy_audio = MonoAudio::new(noisy_samples, sample_rate);
     
