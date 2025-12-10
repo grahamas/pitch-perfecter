@@ -19,6 +19,16 @@ const ALSA_PAUSE_MAX_RETRIES: u32 = 5;
 /// Multiplier for exponential backoff between retry attempts.
 const ALSA_PAUSE_BACKOFF_MULTIPLIER: u64 = 2;
 
+/// Wait for a pause operation to complete using exponential backoff.
+/// This gives ALSA multiple chances to complete the state transition.
+fn await_pause_completion() {
+    let mut delay_ms = ALSA_PAUSE_INITIAL_DELAY_MS;
+    for _ in 0..ALSA_PAUSE_MAX_RETRIES {
+        std::thread::sleep(Duration::from_millis(delay_ms));
+        delay_ms *= ALSA_PAUSE_BACKOFF_MULTIPLIER;
+    }
+}
+
 /// Error type for audio recording operations
 #[derive(Debug)]
 pub enum RecordingError {
@@ -240,12 +250,7 @@ impl MicrophoneRecorder {
         let _ = stream.pause();
         
         // Wait for pause to complete using exponential backoff
-        // This gives ALSA multiple chances to complete the state transition
-        let mut delay_ms = ALSA_PAUSE_INITIAL_DELAY_MS;
-        for _ in 0..ALSA_PAUSE_MAX_RETRIES {
-            std::thread::sleep(Duration::from_millis(delay_ms));
-            delay_ms *= ALSA_PAUSE_BACKOFF_MULTIPLIER;
-        }
+        await_pause_completion();
         
         drop(stream);
     }
@@ -331,11 +336,7 @@ pub fn record_from_microphone(duration_secs: f32) -> Result<MonoAudio, Recording
     let _ = stream.pause();
     
     // Wait for pause to complete using exponential backoff
-    let mut delay_ms = ALSA_PAUSE_INITIAL_DELAY_MS;
-    for _ in 0..ALSA_PAUSE_MAX_RETRIES {
-        std::thread::sleep(Duration::from_millis(delay_ms));
-        delay_ms *= ALSA_PAUSE_BACKOFF_MULTIPLIER;
-    }
+    await_pause_completion();
     
     // Stop recording
     drop(stream);
