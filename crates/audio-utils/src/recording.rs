@@ -9,9 +9,15 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// Delay in milliseconds to wait after pausing a stream before dropping it.
+/// Initial delay in milliseconds to wait after pausing a stream before dropping it.
 /// This gives ALSA time to process the pause command and transition to a stable state.
-const ALSA_PAUSE_DELAY_MS: u64 = 10;
+const ALSA_PAUSE_INITIAL_DELAY_MS: u64 = 5;
+
+/// Maximum number of retry attempts when waiting for pause to complete.
+const ALSA_PAUSE_MAX_RETRIES: u32 = 5;
+
+/// Multiplier for exponential backoff between retry attempts.
+const ALSA_PAUSE_BACKOFF_MULTIPLIER: u64 = 2;
 
 /// Error type for audio recording operations
 #[derive(Debug)]
@@ -228,10 +234,19 @@ impl MicrophoneRecorder {
     
     /// Helper method to safely cleanup a stream by pausing it and waiting before dropping.
     /// This prevents ALSA panics by giving the backend time to process the pause command.
+    /// Uses exponential backoff to await pause completion rather than a fixed arbitrary delay.
     fn cleanup_stream(stream: cpal::Stream) {
+        // Attempt to pause the stream
         let _ = stream.pause();
-        // Give ALSA time to process the pause command
-        std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+        
+        // Wait for pause to complete using exponential backoff
+        // This gives ALSA multiple chances to complete the state transition
+        let mut delay_ms = ALSA_PAUSE_INITIAL_DELAY_MS;
+        for _ in 0..ALSA_PAUSE_MAX_RETRIES {
+            std::thread::sleep(Duration::from_millis(delay_ms));
+            delay_ms *= ALSA_PAUSE_BACKOFF_MULTIPLIER;
+        }
+        
         drop(stream);
     }
 }
@@ -314,8 +329,13 @@ pub fn record_from_microphone(duration_secs: f32) -> Result<MonoAudio, Recording
     
     // Pause the stream before dropping to avoid ALSA panic
     let _ = stream.pause();
-    // Give ALSA time to process the pause command
-    std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+    
+    // Wait for pause to complete using exponential backoff
+    let mut delay_ms = ALSA_PAUSE_INITIAL_DELAY_MS;
+    for _ in 0..ALSA_PAUSE_MAX_RETRIES {
+        std::thread::sleep(Duration::from_millis(delay_ms));
+        delay_ms *= ALSA_PAUSE_BACKOFF_MULTIPLIER;
+    }
     
     // Stop recording
     drop(stream);
