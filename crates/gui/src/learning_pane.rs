@@ -340,3 +340,70 @@ impl Default for LearningPane {
         Self::new()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_learning_pane_creation() {
+        let pane = LearningPane::new();
+        assert_eq!(pane.state, LearningState::Idle);
+        assert!(pane.current_exercise.is_none());
+        assert!(pane.user_pitch.is_none());
+    }
+
+    #[test]
+    fn test_start_exercise() {
+        let mut pane = LearningPane::new();
+        pane.start_exercise();
+        
+        // After starting, we should have an exercise and be in ShowingExercise state
+        assert!(pane.current_exercise.is_some());
+        assert_eq!(pane.state, LearningState::ShowingExercise);
+    }
+
+    #[test]
+    fn test_start_recording_transitions() {
+        let mut pane = LearningPane::new();
+        
+        // Can't start recording when idle
+        pane.start_recording();
+        assert_eq!(pane.state, LearningState::Idle);
+        
+        // Start an exercise first
+        pane.start_exercise();
+        assert_eq!(pane.state, LearningState::ShowingExercise);
+        
+        // Now can start recording
+        pane.start_recording();
+        assert_eq!(pane.state, LearningState::Recording);
+    }
+
+    #[test]
+    fn test_should_be_recording() {
+        let mut pane = LearningPane::new();
+        assert!(!pane.should_be_recording());
+        
+        pane.start_exercise();
+        assert!(!pane.should_be_recording());
+        
+        pane.start_recording();
+        assert!(pane.should_be_recording());
+    }
+
+    #[test]
+    fn test_skip_exercise() {
+        let mut pane = LearningPane::new();
+        pane.start_exercise();
+        assert!(pane.current_exercise.is_some());
+        assert_eq!(pane.state, LearningState::ShowingExercise);
+        
+        pane.skip_exercise();
+        
+        // After skipping, should still have an exercise (since we have many intervals)
+        // and be in the ShowingExercise state again
+        assert!(pane.current_exercise.is_some());
+        assert_eq!(pane.state, LearningState::ShowingExercise);
+    }
+}
