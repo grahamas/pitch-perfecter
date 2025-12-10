@@ -120,7 +120,7 @@ impl PitchPerfecterApp {
         let save_path = self.save_path.clone();
         let enable_bandpass = self.enable_bandpass;
         let enable_spectral_gating = self.enable_spectral_gating;
-        // Clone Arc, not the entire Spectrum data
+        // Clone the Arc reference to avoid expensive Spectrum data copying
         let noise_profile = self.noise_profile.clone();
         
         // Create a new channel for this recording session

@@ -34,8 +34,9 @@ impl PitchProcessor {
         
         // Apply cleaning if enabled
         let processed_audio = if enable_bandpass || enable_spectral_gating {
-            // Use noise profile only if spectral gating is enabled AND profile is available
-            let noise_spectrum = if enable_spectral_gating && noise_profile.is_some() {
+            // Use noise profile only if spectral gating is enabled
+            // If noise_profile is None, cloned() returns None
+            let noise_spectrum = if enable_spectral_gating {
                 noise_profile.cloned()
             } else {
                 None
