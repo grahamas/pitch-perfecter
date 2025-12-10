@@ -9,7 +9,6 @@ use learning_tools::{
     spaced_repetition::PerformanceRating,
     Note,
 };
-use std::sync::mpsc::Receiver;
 
 use crate::pitch_processor::PitchResult;
 
@@ -91,23 +90,17 @@ impl LearningPane {
     }
     
     /// Update with new pitch data from recording
-    pub fn update_pitch(&mut self, pitch_receiver: &Receiver<PitchResult>) {
+    pub fn update_pitch_direct(&mut self, pitch: PitchResult) {
         if self.state == LearningState::Recording {
-            // Get the latest pitch result
-            while let Ok(pitch) = pitch_receiver.try_recv() {
-                self.user_pitch = Some(pitch);
-            }
+            self.user_pitch = Some(pitch);
         }
     }
     
     /// Check the user's response and provide feedback
-    /// Returns true if recording should be stopped
-    pub fn check_response(&mut self) -> bool {
+    pub fn check_response(&mut self) {
         if self.state != LearningState::Recording {
-            return false;
+            return;
         }
-        
-        let should_stop_recording = true;
         
         if let Some(exercise) = &self.current_exercise {
             if let Some(pitch) = &self.user_pitch {
@@ -141,8 +134,6 @@ impl LearningPane {
                 self.feedback_message = "No pitch detected. Please sing louder!".to_string();
             }
         }
-        
-        should_stop_recording
     }
     
     /// Move to the next exercise
@@ -301,7 +292,7 @@ impl LearningPane {
                 }
                 LearningState::Recording => {
                     if ui.button("✓ Check Answer").clicked() {
-                        let _should_stop = self.check_response();
+                        self.check_response();
                         // Note: stopping recording is handled by main app checking should_be_recording()
                     }
                 }

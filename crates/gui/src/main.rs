@@ -138,12 +138,18 @@ impl eframe::App for PitchPerfecterApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Receive pitch results from the audio thread
         // Pitch detection now happens directly on the audio callback thread
+        // Store the latest pitch result and share it with both views
+        let mut latest_pitch = None;
         while let Ok(pitch_result) = self.pitch_receiver.try_recv() {
-            self.current_pitch = Some(pitch_result);
+            latest_pitch = Some(pitch_result);
         }
         
-        // Update learning pane with pitch data
-        self.learning_pane.update_pitch(&self.pitch_receiver);
+        // Update current pitch for pitch detection tab
+        if let Some(pitch) = latest_pitch {
+            self.current_pitch = Some(pitch.clone());
+            // Also update learning pane with the latest pitch
+            self.learning_pane.update_pitch_direct(pitch);
+        }
         
         // Request continuous repaint for real-time updates
         ctx.request_repaint();
