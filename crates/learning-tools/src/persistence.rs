@@ -162,34 +162,35 @@ mod tests {
     use super::*;
     use crate::spaced_repetition::PerformanceRating;
     use std::fs;
+    use std::env;
 
     #[test]
     fn test_save_and_load_new_plan() {
-        let temp_path = "/tmp/test_plan_new.json";
+        let temp_path = env::temp_dir().join("test_plan_new.json");
         
         // Clean up any existing file
-        let _ = fs::remove_file(temp_path);
+        let _ = fs::remove_file(&temp_path);
         
         // Create and save a new plan
         let plan = IntervalLearningPlan::new();
-        save_learning_plan(&plan, temp_path).expect("Failed to save plan");
+        save_learning_plan(&plan, &temp_path).expect("Failed to save plan");
         
         // Load it back
-        let loaded_plan = load_learning_plan(temp_path).expect("Failed to load plan");
+        let loaded_plan = load_learning_plan(&temp_path).expect("Failed to load plan");
         
         // Verify basic properties match
         assert_eq!(plan.exercises_due(), loaded_plan.exercises_due());
         
         // Clean up
-        let _ = fs::remove_file(temp_path);
+        let _ = fs::remove_file(&temp_path);
     }
 
     #[test]
     fn test_save_and_load_with_progress() {
-        let temp_path = "/tmp/test_plan_progress.json";
+        let temp_path = env::temp_dir().join("test_plan_progress.json");
         
         // Clean up any existing file
-        let _ = fs::remove_file(temp_path);
+        let _ = fs::remove_file(&temp_path);
         
         // Create a plan and record some exercises
         let mut plan = IntervalLearningPlan::new();
@@ -198,10 +199,10 @@ mod tests {
         }
         
         // Save it
-        plan.save(temp_path).expect("Failed to save plan");
+        plan.save(&temp_path).expect("Failed to save plan");
         
         // Load it back
-        let loaded_plan = IntervalLearningPlan::load(temp_path).expect("Failed to load plan");
+        let loaded_plan = IntervalLearningPlan::load(&temp_path).expect("Failed to load plan");
         
         // Verify the progress was preserved
         let original_stats = plan.get_statistics();
@@ -211,46 +212,46 @@ mod tests {
         assert_eq!(original_stats.descending.total_intervals, loaded_stats.descending.total_intervals);
         
         // Clean up
-        let _ = fs::remove_file(temp_path);
+        let _ = fs::remove_file(&temp_path);
     }
 
     #[test]
     fn test_learning_plan_exists() {
-        let temp_path = "/tmp/test_plan_exists.json";
+        let temp_path = env::temp_dir().join("test_plan_exists.json");
         
         // Clean up any existing file
-        let _ = fs::remove_file(temp_path);
+        let _ = fs::remove_file(&temp_path);
         
-        assert!(!learning_plan_exists(temp_path));
+        assert!(!learning_plan_exists(&temp_path));
         
         let plan = IntervalLearningPlan::new();
-        save_learning_plan(&plan, temp_path).expect("Failed to save plan");
+        save_learning_plan(&plan, &temp_path).expect("Failed to save plan");
         
-        assert!(learning_plan_exists(temp_path));
+        assert!(learning_plan_exists(&temp_path));
         
         // Clean up
-        let _ = fs::remove_file(temp_path);
+        let _ = fs::remove_file(&temp_path);
     }
 
     #[test]
     fn test_delete_learning_plan() {
-        let temp_path = "/tmp/test_plan_delete.json";
+        let temp_path = env::temp_dir().join("test_plan_delete.json");
         
         // Create a plan file
         let plan = IntervalLearningPlan::new();
-        save_learning_plan(&plan, temp_path).expect("Failed to save plan");
+        save_learning_plan(&plan, &temp_path).expect("Failed to save plan");
         
-        assert!(learning_plan_exists(temp_path));
+        assert!(learning_plan_exists(&temp_path));
         
         // Delete it
-        delete_learning_plan(temp_path).expect("Failed to delete plan");
+        delete_learning_plan(&temp_path).expect("Failed to delete plan");
         
-        assert!(!learning_plan_exists(temp_path));
+        assert!(!learning_plan_exists(&temp_path));
     }
 
     #[test]
     fn test_load_nonexistent_file() {
-        let result = load_learning_plan("/tmp/nonexistent_plan_xyz.json");
+        let result = load_learning_plan(env::temp_dir().join("nonexistent_plan_xyz.json"));
         assert!(result.is_err());
     }
 }

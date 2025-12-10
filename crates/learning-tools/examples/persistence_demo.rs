@@ -14,19 +14,21 @@ use learning_tools::{
     load_learning_plan,
     learning_plan_exists,
 };
+use std::env;
 
 fn main() {
     println!("=== Learning Profile Persistence Demo ===\n");
 
-    let profile_path = "/tmp/my_learning_profile.json";
+    // Use system temp directory for cross-platform compatibility
+    let profile_path = env::temp_dir().join("my_learning_profile.json");
 
     // Check if a profile already exists
-    if learning_plan_exists(profile_path) {
-        println!("📂 Found existing profile at {}", profile_path);
+    if learning_plan_exists(&profile_path) {
+        println!("📂 Found existing profile at {}", profile_path.display());
         println!("   Loading profile...\n");
 
         // Load the existing profile
-        let mut plan = load_learning_plan(profile_path)
+        let mut plan = load_learning_plan(&profile_path)
             .expect("Failed to load learning profile");
 
         println!("✅ Profile loaded successfully!");
@@ -38,7 +40,7 @@ fn main() {
 
         // Save the updated progress
         println!("\n💾 Saving updated progress...");
-        save_learning_plan(&plan, profile_path)
+        save_learning_plan(&plan, &profile_path)
             .expect("Failed to save profile");
         println!("✅ Progress saved!");
 
@@ -57,9 +59,9 @@ fn main() {
 
         // Save the profile
         println!("\n💾 Saving learning profile...");
-        save_learning_plan(&plan, profile_path)
+        save_learning_plan(&plan, &profile_path)
             .expect("Failed to save profile");
-        println!("✅ Profile saved to: {}", profile_path);
+        println!("✅ Profile saved to: {}", profile_path.display());
     }
 
     println!("\n═══════════════════════════════════════");
