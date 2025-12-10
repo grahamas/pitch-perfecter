@@ -9,6 +9,8 @@ use audio_recorder::AudioRecorder;
 use pitch_processor::PitchResult;
 use audio_cleaning::Spectrum;
 
+type NoiseProfile = Arc<Spectrum>;
+
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -25,7 +27,7 @@ fn main() -> eframe::Result {
 }
 
 enum NoiseRecordingResult {
-    Success(Spectrum),
+    Success(NoiseProfile),
     Error(String),
 }
 
@@ -44,8 +46,8 @@ struct PitchPerfecterApp {
     enable_bandpass: bool,
     enable_spectral_gating: bool,
     
-    // Noise profile
-    noise_profile: Option<Spectrum>,
+    // Noise profile (Arc to avoid cloning large spectrum data)
+    noise_profile: Option<NoiseProfile>,
     is_recording_noise: bool,
     noise_receiver: Option<Receiver<NoiseRecordingResult>>,
     
@@ -101,7 +103,8 @@ impl PitchPerfecterApp {
             let result = match record_noise_from_microphone(2.0) {
                 Ok(noise_audio) => {
                     let noise_profile = create_noise_profile(&noise_audio);
-                    NoiseRecordingResult::Success(noise_profile)
+                    // Wrap in Arc to avoid cloning large spectrum data
+                    NoiseRecordingResult::Success(Arc::new(noise_profile))
                 }
                 Err(e) => {
                     NoiseRecordingResult::Error(format!("Failed to record noise: {}", e))
@@ -117,6 +120,7 @@ impl PitchPerfecterApp {
         let save_path = self.save_path.clone();
         let enable_bandpass = self.enable_bandpass;
         let enable_spectral_gating = self.enable_spectral_gating;
+        // Clone Arc, not the entire Spectrum data
         let noise_profile = self.noise_profile.clone();
         
         // Create a new channel for this recording session

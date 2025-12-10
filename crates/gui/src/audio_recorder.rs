@@ -28,7 +28,7 @@ impl AudioRecorder {
         hop_size: usize,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
-        noise_profile: Option<audio_cleaning::Spectrum>,
+        noise_profile: Option<Arc<audio_cleaning::Spectrum>>,
         save_to_file: bool,
         save_path: String,
     ) -> Result<(), String> {
@@ -117,7 +117,7 @@ impl AudioRecorder {
         hop_size: usize,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
-        noise_profile: Option<audio_cleaning::Spectrum>,
+        noise_profile: Option<Arc<audio_cleaning::Spectrum>>,
         save_to_file: bool,
         save_path: String,
     ) -> Result<Stream, String>
@@ -131,8 +131,7 @@ impl AudioRecorder {
         // Create circular buffer for audio samples
         let audio_buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
         
-        // Wrap noise profile in Arc for sharing with audio thread
-        let noise_profile = noise_profile.map(Arc::new);
+        // noise_profile is already an Arc, no need to wrap again
         
         // Setup file writer if saving is enabled
         let wav_writer = if save_to_file {

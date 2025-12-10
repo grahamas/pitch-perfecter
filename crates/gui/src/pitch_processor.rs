@@ -34,14 +34,15 @@ impl PitchProcessor {
         
         // Apply cleaning if enabled
         let processed_audio = if enable_bandpass || enable_spectral_gating {
-            // Use noise profile if spectral gating is enabled and profile is available
-            let noise_spectrum = if enable_spectral_gating {
+            // Use noise profile only if spectral gating is enabled AND profile is available
+            let noise_spectrum = if enable_spectral_gating && noise_profile.is_some() {
                 noise_profile.cloned()
             } else {
                 None
             };
             
             // Note: This uses defaults for bandpass (80-800 Hz for vocals)
+            // If noise_spectrum is None, clean_audio_for_pitch falls back to bandpass filtering
             clean_audio_for_pitch(&audio, noise_spectrum, None)
         } else {
             audio
