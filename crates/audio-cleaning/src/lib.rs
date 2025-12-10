@@ -13,6 +13,7 @@ pub mod types;
 pub mod cleaning;
 pub mod processing;
 pub mod spectral_gating;
+pub mod comparison;
 
 pub use types::{Spectrum, Spectrogram, SpectrogramConfig};
 pub use cleaning::{
@@ -21,3 +22,4 @@ pub use cleaning::{
 };
 pub use processing::find_peak;
 pub use spectral_gating::{SpectralGate, SpectralGateConfig};
+pub use comparison::{FilteringComparison, compare_filtering};

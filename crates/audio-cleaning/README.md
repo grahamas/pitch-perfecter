@@ -13,6 +13,7 @@ This crate provides tools to improve audio quality before pitch detection and an
 - **Noise Spectrum Estimation**: Automatic background noise detection and profiling
 - **FFT/IFFT Processing**: Efficient frequency domain analysis and manipulation
 - **Spectrograms**: Time-frequency representation of audio signals
+- **Filtering Comparison**: Compare before/after filtering for evaluation and debugging
 
 ## Usage
 
@@ -143,6 +144,39 @@ let config = SpectrogramConfig {
 let spectrogram = Spectrogram::from_waveform(&samples, config);
 ```
 
+### Filtering Comparison
+
+Compare audio before and after filtering to evaluate effectiveness:
+
+```rust
+use audio_cleaning::{FilteringComparison, compare_filtering, clean_audio_for_pitch};
+use audio_utils::MonoAudio;
+
+let audio = MonoAudio::new(/* your samples */, 44100);
+
+// Create a comparison by applying a filter
+let comparison = compare_filtering(&audio, |a| clean_audio_for_pitch(a, None, None));
+
+// Access waveforms for time-domain analysis
+let (before_samples, after_samples) = comparison.get_waveforms();
+
+// Get magnitude spectra for frequency-domain analysis
+let (before_spectrum, after_spectrum) = comparison.get_magnitude_spectra();
+
+// Save both audio files for manual review
+comparison.save_audio_pair("before.wav", "after.wav").unwrap();
+```
+
+You can also create a comparison manually:
+
+```rust
+use audio_cleaning::FilteringComparison;
+
+let original = MonoAudio::new(/* ... */, 44100);
+let filtered = clean_audio_for_pitch(&original, None, None);
+let comparison = FilteringComparison::new(original, filtered);
+```
+
 ## Frequency Ranges
 
 Default vocal frequency range (suitable for most voices):
@@ -189,6 +223,26 @@ The crate supports two noise reduction approaches:
 - `apply_spectral_gating(&[f32], Spectrum, Option<f32>) -> Vec<f32>`
   - One-shot spectral gating function (convenience wrapper)
 
+- `compare_filtering(&MonoAudio, F) -> FilteringComparison`
+  - Create a comparison by applying a filtering function
+
+### Filtering Comparison Module
+
+- `FilteringComparison::new(MonoAudio, MonoAudio) -> FilteringComparison`
+  - Create a comparison from before and after audio
+
+- `FilteringComparison::get_waveforms() -> (&[f32], &[f32])`
+  - Get waveform samples for time-domain comparison
+
+- `FilteringComparison::get_magnitude_spectra() -> (Vec<f32>, Vec<f32>)`
+  - Get magnitude spectra for frequency-domain comparison
+
+- `FilteringComparison::save_audio_pair(Path, Path) -> Result<(), AudioIoError>`
+  - Save before and after audio to WAV files
+
+- `FilteringComparison::compute_spectra()`
+  - Compute and cache FFT spectra
+
 ### Spectral Gating Module
 
 - `SpectralGate::new(Spectrum, SpectralGateConfig) -> SpectralGate`
@@ -215,6 +269,11 @@ The crate supports two noise reduction approaches:
 - `SpectralGateConfig`: Configuration for spectral gating
   - `noise_threshold_db`: Threshold in dB below noise floor
   - `smoothing_window`: Number of bins for smoothing
+- `FilteringComparison`: Holds before/after audio and spectra for comparison
+  - `before`: Original audio before filtering
+  - `after`: Audio after filtering
+  - `before_spectrum`: Optional spectrum of original audio
+  - `after_spectrum`: Optional spectrum of filtered audio
 
 ## Performance Considerations
 
@@ -271,6 +330,9 @@ See the `playground` crate for complete examples:
 ```bash
 # Run pitch detection with cleaning example
 cargo run --package playground --example pitch_detection_with_cleaning
+
+# Run filtering comparison demo (demonstrates comparison features)
+cargo run --package playground --example filtering_comparison_demo
 ```
 
 ## License

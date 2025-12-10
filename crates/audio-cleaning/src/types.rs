@@ -14,6 +14,7 @@ thread_local! {
 }
 
 /// Struct representing a computed spectrum, with ability to invert (IFFT) back to time domain
+#[derive(Clone)]
 pub struct Spectrum {
     pub complex: Vec<Complex<f32>>, // Full complex spectrum (not just magnitudes)
     pub n: usize,                   // FFT size
