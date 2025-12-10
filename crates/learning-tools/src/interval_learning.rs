@@ -6,9 +6,10 @@
 use crate::intervals::{Interval, apply_interval};
 use crate::note::Note;
 use crate::spaced_repetition::{PerformanceRating, SpacedRepetitionScheduler};
+use serde::{Deserialize, Serialize};
 
 /// Represents a single interval learning exercise
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IntervalExercise {
     /// The starting note
     pub base_note: Note,
@@ -84,7 +85,7 @@ impl IntervalExercise {
 }
 
 /// Configuration for interval learning sessions
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IntervalLearningConfig {
     /// Base note range for exercises (min, max)
     pub note_range: (Note, Note),
@@ -106,6 +107,7 @@ impl Default for IntervalLearningConfig {
 }
 
 /// Manages interval learning with spaced repetition
+#[derive(Serialize, Deserialize)]
 pub struct IntervalLearningPlan {
     /// Spaced repetition scheduler for ascending intervals
     ascending_scheduler: SpacedRepetitionScheduler<Interval>,

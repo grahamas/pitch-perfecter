@@ -76,15 +76,21 @@ Sound generation utilities for testing and demonstration.
 
 ### learning-tools
 
-Sight-singing learning logic and exercises (placeholder for future development).
+Sight-singing learning logic and exercises with complete interval training system.
+
+**Features:**
+- Musical note and interval representation
+- Spaced repetition algorithm (SM-2) for optimal learning
+- Interval learning plan with automatic scheduling
+- Exercise generation and performance evaluation
+- Progress tracking and statistics
+- **Save/load learning profiles** to preserve progress across sessions
 
 **Planned Features:**
-- Exercise models (intervals, melodies, rhythm)
-- Scoring and grading logic
-- Progress tracking
-- Practice session management
+- Exercise models for melodies and rhythm
+- Practice session management with goals
 
-**Dependencies:** `audio-utils`, `audio-cleaning`, `pitch-detection-utils`
+**Dependencies:** `audio-utils`, `audio-cleaning`, `pitch-detection-utils`, `serde`, `serde_json`
 
 ### gui
 
@@ -165,6 +171,11 @@ cargo run --package playground --example record_from_microphone
 Generate a voice-like test signal:
 ```bash
 cargo run --package playground --bin gen_voice_like
+```
+
+Demonstrate learning profile save/load functionality:
+```bash
+cargo run --package learning-tools --example persistence_demo
 ```
 
 ## Dependency Graph

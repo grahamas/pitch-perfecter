@@ -204,19 +204,46 @@ The GUI could use `sound-synth` to:
 
 ### Data Persistence
 
-The current implementation stores state in memory. For a complete application:
+**Status: ✅ Implemented**
+
+The `persistence` module provides complete save/load functionality for learning profiles:
 
 1. **Serialize learning state**
-   - Save `IntervalLearningPlan` to disk (using `serde`)
+   - Save `IntervalLearningPlan` to disk using JSON (via `serde_json`)
    - Store user progress across sessions
-   - Track long-term statistics
+   - All learning state preserved including:
+     - Interval mastery and easiness factors
+     - Review schedules and next review times
+     - Configuration settings
+     - Separate tracking for ascending/descending intervals
 
-2. **User profiles**
-   - Multiple users with separate learning plans
-   - Historical performance data
-   - Custom configurations per user
+2. **Core functionality**
+   - `save_learning_plan()` - Save a learning plan to a JSON file
+   - `load_learning_plan()` - Load a learning plan from a JSON file
+   - `learning_plan_exists()` - Check if a profile file exists
+   - `delete_learning_plan()` - Delete a profile file
+   - Convenience methods on `IntervalLearningPlan`: `.save()` and `.load()`
+   - Comprehensive error handling with `PersistenceError`
 
-This could be added as a new module in `learning-tools` or as a separate crate.
+3. **Usage example**
+   ```rust
+   use learning_tools::{IntervalLearningPlan, save_learning_plan, load_learning_plan};
+   
+   // Save a learning plan
+   let plan = IntervalLearningPlan::new();
+   save_learning_plan(&plan, "my_profile.json")?;
+   
+   // Load it back later
+   let loaded_plan = load_learning_plan("my_profile.json")?;
+   ```
+
+4. **Future enhancements**
+   - Multiple user profiles with profile management
+   - Historical performance data and analytics
+   - Export/import functionality
+   - Cloud sync capabilities
+
+See `examples/persistence_demo.rs` for a complete working example.
 
 ### Audio Cleaning Integration
 
