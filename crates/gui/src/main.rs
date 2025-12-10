@@ -255,6 +255,15 @@ impl PitchPerfecterApp {
     }
     
     fn render_learning_tab(&mut self, ui: &mut egui::Ui) {
-        self.learning_pane.render(ui);
+        let should_start_recording = self.learning_pane.render(ui);
+        
+        // Handle recording state synchronization
+        let should_be_recording = self.learning_pane.should_be_recording();
+        
+        if should_start_recording && !self.is_recording {
+            self.start_recording();
+        } else if !should_be_recording && self.is_recording {
+            self.stop_recording();
+        }
     }
 }

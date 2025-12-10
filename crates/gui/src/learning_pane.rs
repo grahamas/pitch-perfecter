@@ -101,10 +101,13 @@ impl LearningPane {
     }
     
     /// Check the user's response and provide feedback
-    pub fn check_response(&mut self) {
+    /// Returns true if recording should be stopped
+    pub fn check_response(&mut self) -> bool {
         if self.state != LearningState::Recording {
-            return;
+            return false;
         }
+        
+        let should_stop_recording = true;
         
         if let Some(exercise) = &self.current_exercise {
             if let Some(pitch) = &self.user_pitch {
@@ -138,6 +141,8 @@ impl LearningPane {
                 self.feedback_message = "No pitch detected. Please sing louder!".to_string();
             }
         }
+        
+        should_stop_recording
     }
     
     /// Move to the next exercise
@@ -150,8 +155,15 @@ impl LearningPane {
         self.start_exercise();
     }
     
+    /// Get whether recording should be active
+    pub fn should_be_recording(&self) -> bool {
+        self.state == LearningState::Recording
+    }
+    
     /// Render the learning pane UI
-    pub fn render(&mut self, ui: &mut egui::Ui) {
+    /// Returns true if recording should be started
+    pub fn render(&mut self, ui: &mut egui::Ui) -> bool {
+        let mut start_recording = false;
         ui.heading("Interval Learning");
         ui.add_space(10.0);
         
@@ -280,6 +292,7 @@ impl LearningPane {
                     ui.horizontal(|ui| {
                         if ui.button("🎤 Start Recording").clicked() {
                             self.start_recording();
+                            start_recording = true;
                         }
                         if ui.button("⏭ Skip").clicked() {
                             self.skip_exercise();
@@ -288,7 +301,8 @@ impl LearningPane {
                 }
                 LearningState::Recording => {
                     if ui.button("✓ Check Answer").clicked() {
-                        self.check_response();
+                        let _should_stop = self.check_response();
+                        // Note: stopping recording is handled by main app checking should_be_recording()
                     }
                 }
                 LearningState::ShowingFeedback => {
@@ -316,6 +330,8 @@ impl LearningPane {
             ui.add_space(5.0);
             ui.label("💡 Tip: Enable 'Bandpass Filter' in the Pitch Detection tab for better accuracy!");
         });
+        
+        start_recording
     }
 }
 
