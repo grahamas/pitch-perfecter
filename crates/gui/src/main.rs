@@ -7,6 +7,7 @@ mod pitch_processor;
 
 use audio_recorder::AudioRecorder;
 use pitch_processor::PitchResult;
+use audio_cleaning::Spectrum;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -23,6 +24,11 @@ fn main() -> eframe::Result {
     )
 }
 
+enum NoiseRecordingResult {
+    Success(Spectrum),
+    Error(String),
+}
+
 struct PitchPerfecterApp {
     // Audio recording
     audio_recorder: Arc<Mutex<AudioRecorder>>,
@@ -37,6 +43,11 @@ struct PitchPerfecterApp {
     // Cleaning options
     enable_bandpass: bool,
     enable_spectral_gating: bool,
+    
+    // Noise profile
+    noise_profile: Option<Spectrum>,
+    is_recording_noise: bool,
+    noise_receiver: Option<Receiver<NoiseRecordingResult>>,
     
     // File saving
     save_to_file: bool,
@@ -59,10 +70,46 @@ impl PitchPerfecterApp {
             current_pitch: None,
             enable_bandpass: true,
             enable_spectral_gating: false,
+            noise_profile: None,
+            is_recording_noise: false,
+            noise_receiver: None,
             save_to_file: false,
             save_path: "recording.wav".to_string(),
             status_message: "Ready".to_string(),
         }
+    }
+    
+    fn record_noise(&mut self) {
+        if self.is_recording {
+            self.status_message = "Stop recording before recording noise profile".to_string();
+            return;
+        }
+        
+        self.is_recording_noise = true;
+        self.status_message = "Recording noise... Please remain silent (2 seconds)".to_string();
+        
+        // Create a channel to receive the noise recording result
+        let (tx, rx) = channel();
+        self.noise_receiver = Some(rx);
+        
+        // Record noise in a background thread to avoid blocking UI
+        std::thread::spawn(move || {
+            use audio_utils::recording::record_noise_from_microphone;
+            use audio_cleaning::create_noise_profile;
+            
+            // Record 2 seconds of noise
+            let result = match record_noise_from_microphone(2.0) {
+                Ok(noise_audio) => {
+                    let noise_profile = create_noise_profile(&noise_audio);
+                    NoiseRecordingResult::Success(noise_profile)
+                }
+                Err(e) => {
+                    NoiseRecordingResult::Error(format!("Failed to record noise: {}", e))
+                }
+            };
+            
+            let _ = tx.send(result);
+        });
     }
     
     fn start_recording(&mut self) {
@@ -70,6 +117,7 @@ impl PitchPerfecterApp {
         let save_path = self.save_path.clone();
         let enable_bandpass = self.enable_bandpass;
         let enable_spectral_gating = self.enable_spectral_gating;
+        let noise_profile = self.noise_profile.clone();
         
         // Create a new channel for this recording session
         let (pitch_tx, pitch_rx) = channel();
@@ -89,6 +137,7 @@ impl PitchPerfecterApp {
             HOP_SIZE,
             enable_bandpass,
             enable_spectral_gating,
+            noise_profile,
             save_to_file,
             save_path,
         );
@@ -123,6 +172,23 @@ impl eframe::App for PitchPerfecterApp {
         // Pitch detection now happens directly on the audio callback thread
         while let Ok(pitch_result) = self.pitch_receiver.try_recv() {
             self.current_pitch = Some(pitch_result);
+        }
+        
+        // Check for noise recording results
+        if let Some(ref receiver) = self.noise_receiver {
+            if let Ok(result) = receiver.try_recv() {
+                match result {
+                    NoiseRecordingResult::Success(profile) => {
+                        self.noise_profile = Some(profile);
+                        self.status_message = "Noise profile recorded successfully!".to_string();
+                    }
+                    NoiseRecordingResult::Error(err) => {
+                        self.status_message = err;
+                    }
+                }
+                self.is_recording_noise = false;
+                self.noise_receiver = None;
+            }
         }
         
         // Request continuous repaint for real-time updates
@@ -162,7 +228,37 @@ impl eframe::App for PitchPerfecterApp {
                     .on_hover_text("Filter frequencies outside typical vocal range (80-800 Hz)");
                 
                 ui.checkbox(&mut self.enable_spectral_gating, "Spectral Gating (Noise Reduction)")
-                    .on_hover_text("Reduce background noise using spectral gating");
+                    .on_hover_text("Reduce background noise using spectral gating (requires noise profile)");
+                
+                ui.add_space(5.0);
+                ui.separator();
+                ui.add_space(5.0);
+                
+                ui.label("Noise Profile for Spectral Gating:");
+                
+                ui.horizontal(|ui| {
+                    if self.is_recording_noise {
+                        ui.label("🔴 Recording noise...");
+                    } else if self.noise_profile.is_some() {
+                        ui.label("✓ Noise profile recorded");
+                        if ui.button("Re-record").clicked() {
+                            self.record_noise();
+                        }
+                    } else {
+                        if ui.button("Record Noise Profile").clicked() {
+                            self.record_noise();
+                        }
+                    }
+                });
+                
+                if self.noise_profile.is_none() && self.enable_spectral_gating {
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        "⚠ Spectral gating requires a noise profile"
+                    );
+                }
+                
+                ui.label("Tip: Record 2 seconds of silence in your environment");
             });
             
             ui.add_space(10.0);

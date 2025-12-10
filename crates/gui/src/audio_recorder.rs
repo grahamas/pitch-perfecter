@@ -28,6 +28,7 @@ impl AudioRecorder {
         hop_size: usize,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
+        noise_profile: Option<audio_cleaning::Spectrum>,
         save_to_file: bool,
         save_path: String,
     ) -> Result<(), String> {
@@ -56,6 +57,7 @@ impl AudioRecorder {
                 hop_size,
                 enable_bandpass,
                 enable_spectral_gating,
+                noise_profile,
                 save_to_file,
                 save_path,
             )?,
@@ -69,6 +71,7 @@ impl AudioRecorder {
                 hop_size,
                 enable_bandpass,
                 enable_spectral_gating,
+                noise_profile,
                 save_to_file,
                 save_path,
             )?,
@@ -82,6 +85,7 @@ impl AudioRecorder {
                 hop_size,
                 enable_bandpass,
                 enable_spectral_gating,
+                noise_profile,
                 save_to_file,
                 save_path,
             )?,
@@ -113,6 +117,7 @@ impl AudioRecorder {
         hop_size: usize,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
+        noise_profile: Option<audio_cleaning::Spectrum>,
         save_to_file: bool,
         save_path: String,
     ) -> Result<Stream, String>
@@ -125,6 +130,9 @@ impl AudioRecorder {
         
         // Create circular buffer for audio samples
         let audio_buffer = Arc::new(Mutex::new(Vec::<f32>::new()));
+        
+        // Wrap noise profile in Arc for sharing with audio thread
+        let noise_profile = noise_profile.map(Arc::new);
         
         // Setup file writer if saving is enabled
         let wav_writer = if save_to_file {
@@ -213,6 +221,7 @@ impl AudioRecorder {
                                 sample_rate,
                                 enable_bandpass,
                                 enable_spectral_gating,
+                                noise_profile.as_ref().map(|p| p.as_ref()),
                             ) {
                                 // Send result to main thread
                                 let _ = pitch_sender.send(pitch_result);
