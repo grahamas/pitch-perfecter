@@ -30,3 +30,4 @@
 // Re-export main modules for library use
 pub mod audio_recorder;
 pub mod pitch_processor;
+pub mod learning_pane;
