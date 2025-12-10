@@ -4,14 +4,16 @@ use std::sync::mpsc::{channel, Receiver};
 
 mod audio_recorder;
 mod pitch_processor;
+mod learning_pane;
 
 use audio_recorder::AudioRecorder;
 use pitch_processor::PitchResult;
+use learning_pane::LearningPane;
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 500.0])
+            .with_inner_size([500.0, 600.0])
             .with_resizable(true),
         ..Default::default()
     };
@@ -23,7 +25,17 @@ fn main() -> eframe::Result {
     )
 }
 
+/// Which tab is currently active
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ActiveTab {
+    PitchDetection,
+    Learning,
+}
+
 struct PitchPerfecterApp {
+    // Active tab
+    active_tab: ActiveTab,
+    
     // Audio recording
     audio_recorder: Arc<Mutex<AudioRecorder>>,
     
@@ -44,6 +56,9 @@ struct PitchPerfecterApp {
     
     // Status messages
     status_message: String,
+    
+    // Learning pane
+    learning_pane: LearningPane,
 }
 
 impl PitchPerfecterApp {
@@ -53,6 +68,7 @@ impl PitchPerfecterApp {
         let audio_recorder = Arc::new(Mutex::new(AudioRecorder::new()));
         
         Self {
+            active_tab: ActiveTab::PitchDetection,
             audio_recorder,
             pitch_receiver: pitch_rx,
             is_recording: false,
@@ -62,6 +78,7 @@ impl PitchPerfecterApp {
             save_to_file: false,
             save_path: "recording.wav".to_string(),
             status_message: "Ready".to_string(),
+            learning_pane: LearningPane::new(),
         }
     }
     
@@ -125,6 +142,9 @@ impl eframe::App for PitchPerfecterApp {
             self.current_pitch = Some(pitch_result);
         }
         
+        // Update learning pane with pitch data
+        self.learning_pane.update_pitch(&self.pitch_receiver);
+        
         // Request continuous repaint for real-time updates
         ctx.request_repaint();
         
@@ -132,8 +152,29 @@ impl eframe::App for PitchPerfecterApp {
             ui.heading("Pitch Perfecter");
             ui.add_space(10.0);
             
-            // Recording control
-            ui.group(|ui| {
+            // Tab selection
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut self.active_tab, ActiveTab::PitchDetection, "Pitch Detection");
+                ui.selectable_value(&mut self.active_tab, ActiveTab::Learning, "Learning");
+            });
+            
+            ui.add_space(10.0);
+            ui.separator();
+            ui.add_space(10.0);
+            
+            // Render the appropriate tab content
+            match self.active_tab {
+                ActiveTab::PitchDetection => self.render_pitch_detection_tab(ui),
+                ActiveTab::Learning => self.render_learning_tab(ui),
+            }
+        });
+    }
+}
+
+impl PitchPerfecterApp {
+    fn render_pitch_detection_tab(&mut self, ui: &mut egui::Ui) {
+        // Recording control
+        ui.group(|ui| {
                 ui.heading("Recording");
                 ui.add_space(5.0);
                 
@@ -211,6 +252,9 @@ impl eframe::App for PitchPerfecterApp {
                     ui.colored_label(egui::Color32::YELLOW, "⚠ Filename should end with .wav");
                 }
             });
-        });
+    }
+    
+    fn render_learning_tab(&mut self, ui: &mut egui::Ui) {
+        self.learning_pane.render(ui);
     }
 }
