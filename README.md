@@ -147,6 +147,11 @@ Run the pitch detection with cleaning example:
 cargo run --package playground --example pitch_detection_with_cleaning
 ```
 
+Compare different filtering methods (demonstrates before/after comparison):
+```bash
+cargo run --package playground --example filtering_comparison_demo
+```
+
 List available audio input devices:
 ```bash
 cargo run --package playground --example list_audio_devices
