@@ -38,7 +38,7 @@ fn main() {
     let noise_amplitude = 0.3; // Moderate noise level
     let noisy_samples: Vec<f32> = clean_signal
         .iter()
-        .map(|&sample| sample + noise_amplitude * (rng.random::<f32>() - 0.5))
+        .map(|&sample| sample + noise_amplitude * (rng.gen::<f32>() - 0.5))
         .collect();
     let noisy_audio = MonoAudio::new(noisy_samples, sample_rate);
     
@@ -47,13 +47,13 @@ fn main() {
     
     // Comparison 1: Bandpass filtering (default)
     println!("  a) Bandpass filtering (80-1200 Hz)");
-    let bandpass_comparison = compare_filtering(&noisy_audio, |audio| {
+    let mut bandpass_comparison = compare_filtering(&noisy_audio, |audio| {
         clean_audio_for_pitch(audio, None, None)
     });
     
     // Comparison 2: Spectral gating with noise estimation
     println!("  b) Spectral gating with noise estimation");
-    let spectral_comparison = compare_filtering(&noisy_audio, |audio| {
+    let mut spectral_comparison = compare_filtering(&noisy_audio, |audio| {
         let noise_spectrum = estimate_noise_spectrum(audio);
         clean_audio_for_pitch(audio, noise_spectrum, Some(1.5))
     });
@@ -85,11 +85,8 @@ fn main() {
     
     // Step 5: Analyze spectra
     println!("\nStep 5: Analyzing frequency spectra...");
-    let mut bandpass_comp = bandpass_comparison.clone();
-    let (before_spectrum, after_bandpass_spectrum) = bandpass_comp.get_magnitude_spectra();
-    
-    let mut spectral_comp = spectral_comparison.clone();
-    let (_, after_spectral_spectrum) = spectral_comp.get_magnitude_spectra();
+    let (before_spectrum, after_bandpass_spectrum) = bandpass_comparison.get_magnitude_spectra();
+    let (_, after_spectral_spectrum) = spectral_comparison.get_magnitude_spectra();
     
     // Find peak frequencies
     let find_peak_freq = |spectrum: &[f32], sample_rate: u32| -> (usize, f32) {
