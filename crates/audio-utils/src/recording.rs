@@ -15,9 +15,8 @@ use std::time::Duration;
 /// the state transition before the stream is dropped, preventing panics.
 /// 
 /// Note: cpal does not provide a way to query stream state, so we cannot verify that the
-/// pause has completed. This is a conservative delay based on typical ALSA behavior.
-/// A longer delay is safer but introduces latency when stopping recording.
-const ALSA_PAUSE_DELAY_MS: u64 = 50;
+/// pause has completed. This delay is based on typical ALSA behavior.
+const ALSA_PAUSE_DELAY_MS: u64 = 10;
 
 /// Attempt to pause a stream and wait for the pause to complete.
 /// 
