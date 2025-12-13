@@ -9,7 +9,9 @@ fn test_profile_save_and_load() {
     let profile_path = temp_dir.join("test_gui_profile.json");
 
     // Clean up any existing file
-    let _ = fs::remove_file(&profile_path);
+    if profile_path.exists() {
+        fs::remove_file(&profile_path).ok();
+    }
 
     // Create a new learning plan
     let plan = IntervalLearningPlan::new();
@@ -30,7 +32,9 @@ fn test_profile_save_and_load() {
     assert_eq!(plan.exercises_due(), loaded_plan.exercises_due());
 
     // Clean up
-    let _ = fs::remove_file(&profile_path);
+    if profile_path.exists() {
+        fs::remove_file(&profile_path).ok();
+    }
 }
 
 #[test]
@@ -41,7 +45,9 @@ fn test_profile_with_progress() {
     let profile_path = temp_dir.join("test_gui_profile_progress.json");
 
     // Clean up any existing file
-    let _ = fs::remove_file(&profile_path);
+    if profile_path.exists() {
+        fs::remove_file(&profile_path).ok();
+    }
 
     // Create a plan and do some exercises
     let mut plan = IntervalLearningPlan::new();
@@ -71,7 +77,9 @@ fn test_profile_with_progress() {
     );
 
     // Clean up
-    let _ = fs::remove_file(&profile_path);
+    if profile_path.exists() {
+        fs::remove_file(&profile_path).ok();
+    }
 }
 
 #[test]
@@ -80,7 +88,9 @@ fn test_load_nonexistent_profile() {
     let profile_path = temp_dir.join("nonexistent_profile_xyz123.json");
 
     // Ensure file doesn't exist
-    let _ = fs::remove_file(&profile_path);
+    if profile_path.exists() {
+        fs::remove_file(&profile_path).ok();
+    }
 
     // Try to load - should fail
     let result = load_learning_plan(&profile_path);
