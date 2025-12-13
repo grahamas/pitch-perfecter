@@ -2,11 +2,14 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig, Sample};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
+use std::time::Duration;
 
 use crate::pitch_processor::{PitchProcessor, PitchResult};
 use pitch_detection_utils::ThreadSafeYinDetector;
 
-const BUFFER_SIZE: usize = 4096;
+/// Delay in milliseconds to wait after pausing a stream before dropping it.
+/// This gives ALSA time to process the pause command and transition to a stable state.
+const ALSA_PAUSE_DELAY_MS: u64 = 10;
 
 pub struct AudioRecorder {
     stream: Option<Stream>,
@@ -97,9 +100,18 @@ impl AudioRecorder {
     
     pub fn stop(&mut self) -> Result<(), String> {
         if let Some(stream) = self.stream.take() {
-            drop(stream);
+            Self::cleanup_stream(stream);
         }
         Ok(())
+    }
+    
+    /// Helper method to safely cleanup a stream by pausing it and waiting before dropping.
+    /// This prevents ALSA panics by giving the backend time to process the pause command.
+    fn cleanup_stream(stream: Stream) {
+        let _ = stream.pause();
+        // Give ALSA time to process the pause command
+        std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+        drop(stream);
     }
     
     fn build_stream<T>(
@@ -201,10 +213,11 @@ impl AudioRecorder {
                     if let Ok(mut buffer) = buffer_clone.lock() {
                         buffer.extend_from_slice(&mono_samples);
                         
-                        // Process when we have enough samples
-                        if buffer.len() >= BUFFER_SIZE {
-                            // Take the samples for processing
-                            let samples_to_process: Vec<f32> = buffer.drain(..).collect();
+                        // Process when we have enough samples for pitch detection
+                        // Use window_size instead of BUFFER_SIZE to match detector expectations
+                        while buffer.len() >= window_size {
+                            // Take exactly window_size samples for processing
+                            let samples_to_process: Vec<f32> = buffer.drain(..window_size).collect();
                             
                             // Process pitch detection directly on audio thread
                             if let Some(pitch_result) = PitchProcessor::process_audio_chunk(
@@ -226,5 +239,14 @@ impl AudioRecorder {
         ).map_err(|e| format!("Failed to build input stream: {}", e))?;
         
         Ok(stream)
+    }
+}
+
+impl Drop for AudioRecorder {
+    fn drop(&mut self) {
+        // Ensure stream is properly cleaned up even if stop() wasn't called
+        if let Some(stream) = self.stream.take() {
+            Self::cleanup_stream(stream);
+        }
     }
 }
