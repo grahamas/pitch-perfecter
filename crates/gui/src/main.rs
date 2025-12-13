@@ -1,14 +1,14 @@
 use eframe::egui;
-use std::sync::{Arc, Mutex};
-use std::sync::mpsc::{channel, Receiver};
 use std::path::PathBuf;
+use std::sync::mpsc::{channel, Receiver};
+use std::sync::{Arc, Mutex};
 
 mod audio_recorder;
 mod pitch_processor;
 
 use audio_recorder::AudioRecorder;
+use learning_tools::{load_learning_plan, save_learning_plan, IntervalLearningPlan};
 use pitch_processor::PitchResult;
-use learning_tools::{IntervalLearningPlan, load_learning_plan, save_learning_plan};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
@@ -17,7 +17,7 @@ fn main() -> eframe::Result {
             .with_resizable(true),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "Pitch Perfecter",
         options,
@@ -28,25 +28,25 @@ fn main() -> eframe::Result {
 struct PitchPerfecterApp {
     // Audio recording
     audio_recorder: Arc<Mutex<AudioRecorder>>,
-    
+
     // Pitch results receiver (processing now runs on audio thread)
     pitch_receiver: Receiver<PitchResult>,
-    
+
     // UI state
     is_recording: bool,
     current_pitch: Option<PitchResult>,
-    
+
     // Cleaning options
     enable_bandpass: bool,
     enable_spectral_gating: bool,
-    
+
     // File saving
     save_to_file: bool,
     save_path: String,
-    
+
     // Status messages
     status_message: String,
-    
+
     // Learning profile management
     learning_plan: Option<IntervalLearningPlan>,
     profile_path: String,
@@ -56,9 +56,9 @@ struct PitchPerfecterApp {
 impl PitchPerfecterApp {
     fn new(_cc: &eframe::CreationContext<'_>) -> Self {
         let (_pitch_tx, pitch_rx) = channel();
-        
+
         let audio_recorder = Arc::new(Mutex::new(AudioRecorder::new()));
-        
+
         Self {
             audio_recorder,
             pitch_receiver: pitch_rx,
@@ -74,23 +74,23 @@ impl PitchPerfecterApp {
             profile_status_message: "No profile loaded".to_string(),
         }
     }
-    
+
     fn start_recording(&mut self) {
         let save_to_file = self.save_to_file;
         let save_path = self.save_path.clone();
         let enable_bandpass = self.enable_bandpass;
         let enable_spectral_gating = self.enable_spectral_gating;
-        
+
         // Create a new channel for this recording session
         let (pitch_tx, pitch_rx) = channel();
         self.pitch_receiver = pitch_rx;
-        
+
         // Detector parameters - same as in PitchProcessor
         const WINDOW_SIZE: usize = 2048;
         const HOP_SIZE: usize = 1024;
         const POWER_THRESHOLD: f32 = 0.1;
         const CLARITY_THRESHOLD: f32 = 0.7;
-        
+
         let result = self.audio_recorder.lock().unwrap().start(
             pitch_tx,
             POWER_THRESHOLD,
@@ -102,7 +102,7 @@ impl PitchPerfecterApp {
             save_to_file,
             save_path,
         );
-        
+
         match result {
             Ok(_) => {
                 self.is_recording = true;
@@ -113,7 +113,7 @@ impl PitchPerfecterApp {
             }
         }
     }
-    
+
     fn stop_recording(&mut self) {
         match self.audio_recorder.lock().unwrap().stop() {
             Ok(_) => {
@@ -125,12 +125,12 @@ impl PitchPerfecterApp {
             }
         }
     }
-    
+
     fn new_profile(&mut self) {
         self.learning_plan = Some(IntervalLearningPlan::new());
         self.profile_status_message = "New profile created".to_string();
     }
-    
+
     fn load_profile(&mut self) {
         let path = PathBuf::from(&self.profile_path);
         match load_learning_plan(&path) {
@@ -143,7 +143,7 @@ impl PitchPerfecterApp {
             }
         }
     }
-    
+
     fn save_profile(&mut self) {
         if let Some(ref plan) = self.learning_plan {
             let path = PathBuf::from(&self.profile_path);
@@ -156,7 +156,8 @@ impl PitchPerfecterApp {
                 }
             }
         } else {
-            self.profile_status_message = "No profile to save. Create a new profile first.".to_string();
+            self.profile_status_message =
+                "No profile to save. Create a new profile first.".to_string();
         }
     }
 }
@@ -168,65 +169,66 @@ impl eframe::App for PitchPerfecterApp {
         while let Ok(pitch_result) = self.pitch_receiver.try_recv() {
             self.current_pitch = Some(pitch_result);
         }
-        
+
         // Request continuous repaint for real-time updates
         ctx.request_repaint();
-        
+
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.heading("Pitch Perfecter");
             ui.add_space(10.0);
-            
+
             // Recording control
             ui.group(|ui| {
                 ui.heading("Recording");
                 ui.add_space(5.0);
-                
+
                 if self.is_recording {
                     if ui.button("⏹ Stop Recording").clicked() {
                         self.stop_recording();
                     }
-                } else {
-                    if ui.button("⏺ Start Recording").clicked() {
-                        self.start_recording();
-                    }
+                } else if ui.button("⏺ Start Recording").clicked() {
+                    self.start_recording();
                 }
-                
+
                 ui.add_space(5.0);
                 ui.label(&self.status_message);
             });
-            
+
             ui.add_space(10.0);
-            
+
             // Cleaning options
             ui.group(|ui| {
                 ui.heading("Cleaning Options");
                 ui.add_space(5.0);
-                
+
                 ui.checkbox(&mut self.enable_bandpass, "Bandpass Filter (Vocal Range)")
                     .on_hover_text("Filter frequencies outside typical vocal range (80-800 Hz)");
-                
-                ui.checkbox(&mut self.enable_spectral_gating, "Spectral Gating (Noise Reduction)")
-                    .on_hover_text("Reduce background noise using spectral gating");
+
+                ui.checkbox(
+                    &mut self.enable_spectral_gating,
+                    "Spectral Gating (Noise Reduction)",
+                )
+                .on_hover_text("Reduce background noise using spectral gating");
             });
-            
+
             ui.add_space(10.0);
-            
+
             // Pitch display
             ui.group(|ui| {
                 ui.heading("Detected Pitch");
                 ui.add_space(5.0);
-                
+
                 if let Some(ref pitch) = self.current_pitch {
                     ui.horizontal(|ui| {
                         ui.label("Note:");
                         ui.heading(&pitch.note_name);
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Frequency:");
                         ui.heading(format!("{:.2} Hz", pitch.frequency));
                     });
-                    
+
                     ui.horizontal(|ui| {
                         ui.label("Clarity:");
                         ui.add(egui::ProgressBar::new(pitch.clarity).show_percentage());
@@ -235,73 +237,80 @@ impl eframe::App for PitchPerfecterApp {
                     ui.label("No pitch detected");
                 }
             });
-            
+
             ui.add_space(10.0);
-            
+
             // File saving options
             ui.group(|ui| {
                 ui.heading("Save Recording");
                 ui.add_space(5.0);
-                
+
                 ui.checkbox(&mut self.save_to_file, "Save to file in real-time")
                     .on_hover_text("Save audio to a WAV file while recording");
-                
+
                 ui.horizontal(|ui| {
                     ui.label("Filename:");
                     ui.text_edit_singleline(&mut self.save_path);
                 });
-                
+
                 if !self.save_path.ends_with(".wav") {
                     ui.colored_label(egui::Color32::YELLOW, "⚠ Filename should end with .wav");
                 }
             });
-            
+
             ui.add_space(10.0);
-            
+
             // Learning profile management
             ui.group(|ui| {
                 ui.heading("Learning Profile");
                 ui.add_space(5.0);
-                
+
                 ui.horizontal(|ui| {
                     if ui.button("📝 New Profile").clicked() {
                         self.new_profile();
                     }
-                    
+
                     if ui.button("📂 Load Profile").clicked() {
                         self.load_profile();
                     }
-                    
+
                     if ui.button("💾 Save Profile").clicked() {
                         self.save_profile();
                     }
                 });
-                
+
                 ui.add_space(5.0);
-                
+
                 ui.horizontal(|ui| {
                     ui.label("Profile path:");
                     ui.text_edit_singleline(&mut self.profile_path);
                 });
-                
+
                 if !self.profile_path.ends_with(".json") {
-                    ui.colored_label(egui::Color32::YELLOW, "⚠ Profile path should end with .json");
+                    ui.colored_label(
+                        egui::Color32::YELLOW,
+                        "⚠ Profile path should end with .json",
+                    );
                 }
-                
+
                 ui.add_space(5.0);
                 ui.label(&self.profile_status_message);
-                
+
                 if let Some(ref plan) = self.learning_plan {
                     ui.add_space(5.0);
                     ui.separator();
                     ui.label("Profile Status:");
                     let stats = plan.get_statistics();
                     ui.label(format!("  Exercises due: {}", plan.exercises_due()));
-                    ui.label(format!("  Ascending intervals: {} mastered / {}", 
-                        stats.ascending.mastered_intervals, stats.ascending.total_intervals));
+                    ui.label(format!(
+                        "  Ascending intervals: {} mastered / {}",
+                        stats.ascending.mastered_intervals, stats.ascending.total_intervals
+                    ));
                     if stats.practice_both_directions {
-                        ui.label(format!("  Descending intervals: {} mastered / {}", 
-                            stats.descending.mastered_intervals, stats.descending.total_intervals));
+                        ui.label(format!(
+                            "  Descending intervals: {} mastered / {}",
+                            stats.descending.mastered_intervals, stats.descending.total_intervals
+                        ));
                     }
                 }
             });
