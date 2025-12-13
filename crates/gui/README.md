@@ -16,6 +16,7 @@ cargo run -p gui --bin pitch-perfecter-gui
 - **Low Latency**: ~50ms end-to-end (capture → processing → display)
 - **Audio Cleaning**: Configurable bandpass filter for vocal range (80-800 Hz)
 - **WAV Recording**: Optional real-time file saving
+- **Learning Profile Management**: Save, load, and create learning profiles for interval training
 - **Cross-platform**: Works on Linux, macOS, and Windows
 
 ## Architecture
@@ -69,6 +70,14 @@ Microphone → Audio Thread (cpal callback)
 │ Save Recording                 │
 │  ☐ Save to file in real-time  │
 │  Filename: [recording.wav]     │
+├────────────────────────────────┤
+│ Learning Profile               │
+│  [📝 New] [📂 Load] [💾 Save]  │
+│  Profile path: [my_profile.json]│
+│  Status: Profile loaded        │
+│  Exercises due: 24             │
+│  Ascending: 0 mastered / 12    │
+│  Descending: 0 mastered / 12   │
 └────────────────────────────────┘
 ```
 
@@ -96,6 +105,14 @@ Microphone → Audio Thread (cpal callback)
 - Saved to current working directory
 - Warning if filename doesn't end with `.wav`
 
+**Learning Profile Management**
+- **New Profile**: Create a fresh learning profile for interval training
+- **Load Profile**: Load an existing profile from disk (preserves all progress)
+- **Save Profile**: Save current profile to disk (maintains learning state)
+- **Profile Status**: View exercises due and mastery statistics
+- Profile files stored as JSON for portability
+- Warning if profile path doesn't end with `.json`
+
 ## Dependencies
 
 ```toml
@@ -105,6 +122,7 @@ hound = "3.5"        # WAV file I/O
 audio-utils          # Audio data structures
 audio-cleaning       # Bandpass filtering
 pitch-detection-utils # YIN algorithm with ThreadSafeYinDetector
+learning-tools       # Interval learning and profile persistence
 ```
 
 ## API Requirements
@@ -114,6 +132,9 @@ This crate depends on:
 - `audio_cleaning::clean_audio_for_pitch` - Signal preprocessing
 - `pitch_detection_utils::ThreadSafeYinDetector` - Thread-safe pitch detection wrapper (added)
 - `pitch_detection_utils::hz_to_note_name` - Frequency to note conversion
+- `learning_tools::IntervalLearningPlan` - Learning profile management
+- `learning_tools::save_learning_plan` - Profile saving
+- `learning_tools::load_learning_plan` - Profile loading
 
 **Note**: `ThreadSafeYinDetector` was added to `pitch-detection-utils` to enable thread-safe pitch detection. It wraps the external crate's `YINDetector` (which uses `Rc<RefCell<>>`) with `Arc<Mutex<>>`.
 
@@ -141,6 +162,7 @@ This crate depends on:
 2. **Default device**: No device selection UI
 3. **Fixed buffer**: 4096 samples, not configurable
 4. **Spectral gating**: Not functional (requires noise profile)
+5. **Learning exercises**: Profile management is implemented, but the learning exercise pane is not yet implemented
 
 ## Implementation Notes
 
