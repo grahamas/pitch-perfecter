@@ -1,17 +1,19 @@
 use eframe::egui;
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver};
+use std::path::PathBuf;
 
 mod audio_recorder;
 mod pitch_processor;
 
 use audio_recorder::AudioRecorder;
 use pitch_processor::PitchResult;
+use learning_tools::{IntervalLearningPlan, load_learning_plan, save_learning_plan};
 
 fn main() -> eframe::Result {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_inner_size([400.0, 500.0])
+            .with_inner_size([400.0, 700.0])
             .with_resizable(true),
         ..Default::default()
     };
@@ -44,6 +46,11 @@ struct PitchPerfecterApp {
     
     // Status messages
     status_message: String,
+    
+    // Learning profile management
+    learning_plan: Option<IntervalLearningPlan>,
+    profile_path: String,
+    profile_status_message: String,
 }
 
 impl PitchPerfecterApp {
@@ -62,6 +69,9 @@ impl PitchPerfecterApp {
             save_to_file: false,
             save_path: "recording.wav".to_string(),
             status_message: "Ready".to_string(),
+            learning_plan: None,
+            profile_path: "my_profile.json".to_string(),
+            profile_status_message: "No profile loaded".to_string(),
         }
     }
     
@@ -113,6 +123,40 @@ impl PitchPerfecterApp {
             Err(e) => {
                 self.status_message = format!("Error stopping recording: {}", e);
             }
+        }
+    }
+    
+    fn new_profile(&mut self) {
+        self.learning_plan = Some(IntervalLearningPlan::new());
+        self.profile_status_message = "New profile created".to_string();
+    }
+    
+    fn load_profile(&mut self) {
+        let path = PathBuf::from(&self.profile_path);
+        match load_learning_plan(&path) {
+            Ok(plan) => {
+                self.learning_plan = Some(plan);
+                self.profile_status_message = format!("Profile loaded from {}", self.profile_path);
+            }
+            Err(e) => {
+                self.profile_status_message = format!("Error loading profile: {}", e);
+            }
+        }
+    }
+    
+    fn save_profile(&mut self) {
+        if let Some(ref plan) = self.learning_plan {
+            let path = PathBuf::from(&self.profile_path);
+            match save_learning_plan(plan, &path) {
+                Ok(_) => {
+                    self.profile_status_message = format!("Profile saved to {}", self.profile_path);
+                }
+                Err(e) => {
+                    self.profile_status_message = format!("Error saving profile: {}", e);
+                }
+            }
+        } else {
+            self.profile_status_message = "No profile to save. Create a new profile first.".to_string();
         }
     }
 }
@@ -209,6 +253,56 @@ impl eframe::App for PitchPerfecterApp {
                 
                 if !self.save_path.ends_with(".wav") {
                     ui.colored_label(egui::Color32::YELLOW, "⚠ Filename should end with .wav");
+                }
+            });
+            
+            ui.add_space(10.0);
+            
+            // Learning profile management
+            ui.group(|ui| {
+                ui.heading("Learning Profile");
+                ui.add_space(5.0);
+                
+                ui.horizontal(|ui| {
+                    if ui.button("📝 New Profile").clicked() {
+                        self.new_profile();
+                    }
+                    
+                    if ui.button("📂 Load Profile").clicked() {
+                        self.load_profile();
+                    }
+                    
+                    if ui.button("💾 Save Profile").clicked() {
+                        self.save_profile();
+                    }
+                });
+                
+                ui.add_space(5.0);
+                
+                ui.horizontal(|ui| {
+                    ui.label("Profile path:");
+                    ui.text_edit_singleline(&mut self.profile_path);
+                });
+                
+                if !self.profile_path.ends_with(".json") {
+                    ui.colored_label(egui::Color32::YELLOW, "⚠ Profile path should end with .json");
+                }
+                
+                ui.add_space(5.0);
+                ui.label(&self.profile_status_message);
+                
+                if let Some(ref plan) = self.learning_plan {
+                    ui.add_space(5.0);
+                    ui.separator();
+                    ui.label("Profile Status:");
+                    let stats = plan.get_statistics();
+                    ui.label(format!("  Exercises due: {}", plan.exercises_due()));
+                    ui.label(format!("  Ascending intervals: {} mastered / {}", 
+                        stats.ascending.mastered_intervals, stats.ascending.total_intervals));
+                    if stats.practice_both_directions {
+                        ui.label(format!("  Descending intervals: {} mastered / {}", 
+                            stats.descending.mastered_intervals, stats.descending.total_intervals));
+                    }
                 }
             });
         });
