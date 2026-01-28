@@ -47,11 +47,14 @@ impl PitchProcessor {
         };
         
         // Detect pitch
-        let result = if let Some(pitch) = detector.get_mono_pitch(processed_audio) {
+        let pitch_result = detector.get_mono_pitch(processed_audio);
+        
+        // Mark the end of processing (whether or not detection succeeded)
+        latency.mark_processing_end();
+        
+        // Return result with latency metrics
+        if let Some(pitch) = pitch_result {
             let note_name = hz_to_note_name(pitch.frequency);
-            
-            // Mark the end of processing
-            latency.mark_processing_end();
             
             Some(PitchResult {
                 frequency: pitch.frequency,
@@ -61,8 +64,6 @@ impl PitchProcessor {
             })
         } else {
             None
-        };
-        
-        result
+        }
     }
 }

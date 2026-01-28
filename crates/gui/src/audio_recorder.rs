@@ -218,20 +218,33 @@ impl AudioRecorder {
                         buffer.extend_from_slice(&mono_samples);
                         
                         // Process when we have enough samples for pitch detection
-                        // Use window_size instead of BUFFER_SIZE to match detector expectations
+                        // Only track latency for the first chunk in this callback to avoid
+                        // misleading measurements where later chunks include earlier processing time
+                        let mut is_first_chunk = true;
+                        
                         while buffer.len() >= window_size {
                             // Take exactly window_size samples for processing
                             let samples_to_process: Vec<f32> = buffer.drain(..window_size).collect();
                             
+                            // Create latency metrics with current timestamp for each chunk
+                            // This ensures accurate per-chunk measurements
+                            let chunk_latency = if is_first_chunk {
+                                // First chunk uses the callback timestamp
+                                latency.clone()
+                            } else {
+                                // Subsequent chunks get a fresh timestamp
+                                LatencyMetrics::with_callback_timestamp(Instant::now())
+                            };
+                            is_first_chunk = false;
+                            
                             // Process pitch detection directly on audio thread
-                            // Clone latency metrics for this chunk
                             if let Some(pitch_result) = PitchProcessor::process_audio_chunk(
                                 detector,
                                 samples_to_process,
                                 sample_rate,
                                 enable_bandpass,
                                 enable_spectral_gating,
-                                latency.clone(),
+                                chunk_latency,
                             ) {
                                 // Send result to main thread
                                 let _ = pitch_sender.send(pitch_result);

@@ -18,7 +18,7 @@ Measures the time taken for:
 
 **Color coding:**
 - Green: < 20ms (excellent)
-- Orange: 20-50ms (warning)
+- Orange: ≥ 20ms (warning - may need optimization)
 
 ### 3. Callback to Output Latency
 Measures the total time from when the audio callback is invoked to when the pitch result is ready to be displayed.
