@@ -2,8 +2,9 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use cpal::{Device, Stream, StreamConfig, Sample};
 use std::sync::{Arc, Mutex};
 use std::sync::mpsc::Sender;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use audio_utils::LatencyMetrics;
 use crate::pitch_processor::{PitchProcessor, PitchResult};
 use pitch_detection_utils::ThreadSafeYinDetector;
 
@@ -165,7 +166,10 @@ impl AudioRecorder {
         
         let stream = device.build_input_stream(
             config,
-            move |data: &[T], _: &cpal::InputCallbackInfo| {
+            move |data: &[T], _callback_info: &cpal::InputCallbackInfo| {
+                // Create latency metrics and capture callback timestamp
+                let latency = LatencyMetrics::with_callback_timestamp(Instant::now());
+                
                 // Create detector locally in the audio thread
                 // This avoids Send issues with Rc in the detector
                 thread_local! {
@@ -220,12 +224,14 @@ impl AudioRecorder {
                             let samples_to_process: Vec<f32> = buffer.drain(..window_size).collect();
                             
                             // Process pitch detection directly on audio thread
+                            // Clone latency metrics for this chunk
                             if let Some(pitch_result) = PitchProcessor::process_audio_chunk(
                                 detector,
                                 samples_to_process,
                                 sample_rate,
                                 enable_bandpass,
                                 enable_spectral_gating,
+                                latency.clone(),
                             ) {
                                 // Send result to main thread
                                 let _ = pitch_sender.send(pitch_result);
