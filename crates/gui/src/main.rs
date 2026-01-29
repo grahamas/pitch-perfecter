@@ -158,11 +158,13 @@ impl eframe::App for PitchPerfecterApp {
                 ui.heading("Cleaning Options");
                 ui.add_space(5.0);
                 
-                ui.checkbox(&mut self.enable_bandpass, "Bandpass Filter (Vocal Range)")
-                    .on_hover_text("Filter frequencies outside typical vocal range (80-800 Hz)");
-                
-                ui.checkbox(&mut self.enable_spectral_gating, "Spectral Gating (Noise Reduction)")
-                    .on_hover_text("Reduce background noise using spectral gating");
+                ui.add_enabled_ui(!self.is_recording, |ui| {
+                    ui.checkbox(&mut self.enable_bandpass, "Bandpass Filter (Vocal Range)")
+                        .on_hover_text("Filter frequencies outside typical vocal range (80-800 Hz)");
+                    
+                    ui.checkbox(&mut self.enable_spectral_gating, "Spectral Gating (Noise Reduction)")
+                        .on_hover_text("Reduce background noise using spectral gating");
+                });
             });
             
             ui.add_space(10.0);
@@ -284,12 +286,14 @@ impl eframe::App for PitchPerfecterApp {
                 ui.heading("Save Recording");
                 ui.add_space(5.0);
                 
-                ui.checkbox(&mut self.save_to_file, "Save to file in real-time")
-                    .on_hover_text("Save audio to a WAV file while recording");
-                
-                ui.horizontal(|ui| {
-                    ui.label("Filename:");
-                    ui.text_edit_singleline(&mut self.save_path);
+                ui.add_enabled_ui(!self.is_recording, |ui| {
+                    ui.checkbox(&mut self.save_to_file, "Save to file in real-time")
+                        .on_hover_text("Save audio to a WAV file while recording");
+                    
+                    ui.horizontal(|ui| {
+                        ui.label("Filename:");
+                        ui.text_edit_singleline(&mut self.save_path);
+                    });
                 });
                 
                 if !self.save_path.ends_with(".wav") {
