@@ -60,6 +60,10 @@ Microphone → Audio Thread (cpal callback)
 │ Cleaning Options               │
 │  ☑ Bandpass Filter             │
 │  ☐ Spectral Gating             │
+│  ────────────────────────      │
+│  Noise Profile:                │
+│  [Record Noise Profile]        │
+│  Tip: Record 2 seconds...      │
 ├────────────────────────────────┤
 │ Detected Pitch                 │
 │  Note: A4                      │
@@ -80,7 +84,12 @@ Microphone → Audio Thread (cpal callback)
 
 **Cleaning Options**
 - **Bandpass Filter**: Removes frequencies outside 80-800 Hz (recommended for vocals)
-- **Spectral Gating**: Placeholder for noise reduction (requires noise profile)
+- **Spectral Gating**: Advanced noise reduction using recorded noise profile
+- **Noise Profile Recording**: Record 2 seconds of room silence to create a noise profile for spectral gating
+  - Click "Record Noise Profile" button
+  - Remain silent for 2 seconds
+  - The profile is saved and used when spectral gating is enabled
+  - Can be re-recorded if environment changes
 
 **Pitch Display**
 - **Note**: Musical note in scientific notation (e.g., A4, C#5)
@@ -111,7 +120,10 @@ pitch-detection-utils # YIN algorithm with ThreadSafeYinDetector
 
 This crate depends on:
 - `audio_utils::MonoAudio` - Audio data representation
+- `audio_utils::recording::record_noise_from_microphone` - Background noise recording
 - `audio_cleaning::clean_audio_for_pitch` - Signal preprocessing
+- `audio_cleaning::create_noise_profile` - Noise profile creation for spectral gating
+- `audio_cleaning::Spectrum` - Frequency domain representation (now Clone)
 - `pitch_detection_utils::ThreadSafeYinDetector` - Thread-safe pitch detection wrapper (added)
 - `pitch_detection_utils::hz_to_note_name` - Frequency to note conversion
 
@@ -135,12 +147,22 @@ This crate depends on:
 - **Cause**: Invalid filename, permission issues, or disk full
 - **Solution**: Ensure filename ends with `.wav`, check permissions and disk space
 
+### Noise Profile Recording Fails
+- **Cause**: No input device, permissions denied, or device in use
+- **Solution**: Ensure microphone access is granted, close other audio apps
+- **Tip**: Stop any active recording before recording noise profile
+
+### Spectral Gating Not Working
+- **Cause**: No noise profile recorded or spectral gating checkbox not enabled
+- **Solution**: Record a noise profile first, then enable the "Spectral Gating" checkbox
+- **Tip**: Record noise in the same environment where you'll be singing/playing
+
 ## Limitations
 
 1. **Mono only**: Stereo inputs are mixed to mono
 2. **Default device**: No device selection UI
 3. **Fixed buffer**: 4096 samples, not configurable
-4. **Spectral gating**: Not functional (requires noise profile)
+4. **Noise profile persistence**: Noise profiles are not saved between sessions
 
 ## Implementation Notes
 
@@ -167,7 +189,7 @@ Immediate mode GUI is simple to reason about and well-suited for real-time updat
 **High Priority**
 - Audio device selection UI
 - Configurable buffer size
-- Real-time noise profile estimation
+- Save/load noise profiles to disk
 
 **Medium Priority**
 - Waveform visualization

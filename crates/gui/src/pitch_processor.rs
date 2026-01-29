@@ -22,6 +22,7 @@ impl PitchProcessor {
         sample_rate: u32,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
+        noise_profile: Option<&audio_cleaning::Spectrum>,
     ) -> Option<PitchResult> {
         // Only process if we have enough samples
         if samples.len() < WINDOW_SIZE {
@@ -33,10 +34,17 @@ impl PitchProcessor {
         
         // Apply cleaning if enabled
         let processed_audio = if enable_bandpass || enable_spectral_gating {
+            // Use noise profile only if spectral gating is enabled
+            // If noise_profile is None, cloned() returns None
+            let noise_spectrum = if enable_spectral_gating {
+                noise_profile.cloned()
+            } else {
+                None
+            };
+            
             // Note: This uses defaults for bandpass (80-800 Hz for vocals)
-            // For real-time processing, we don't use noise spectrum estimation
-            // as it requires a pre-recorded noise profile
-            clean_audio_for_pitch(&audio, None, None)
+            // If noise_spectrum is None, clean_audio_for_pitch falls back to bandpass filtering
+            clean_audio_for_pitch(&audio, noise_spectrum, None)
         } else {
             audio
         };

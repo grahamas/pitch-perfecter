@@ -31,6 +31,7 @@ impl AudioRecorder {
         hop_size: usize,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
+        noise_profile: Option<Arc<audio_cleaning::Spectrum>>,
         save_to_file: bool,
         save_path: String,
     ) -> Result<(), String> {
@@ -59,6 +60,7 @@ impl AudioRecorder {
                 hop_size,
                 enable_bandpass,
                 enable_spectral_gating,
+                noise_profile,
                 save_to_file,
                 save_path,
             )?,
@@ -72,6 +74,7 @@ impl AudioRecorder {
                 hop_size,
                 enable_bandpass,
                 enable_spectral_gating,
+                noise_profile,
                 save_to_file,
                 save_path,
             )?,
@@ -85,6 +88,7 @@ impl AudioRecorder {
                 hop_size,
                 enable_bandpass,
                 enable_spectral_gating,
+                noise_profile,
                 save_to_file,
                 save_path,
             )?,
@@ -125,6 +129,7 @@ impl AudioRecorder {
         hop_size: usize,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
+        noise_profile: Option<Arc<audio_cleaning::Spectrum>>,
         save_to_file: bool,
         save_path: String,
     ) -> Result<Stream, String>
@@ -226,6 +231,7 @@ impl AudioRecorder {
                                 sample_rate,
                                 enable_bandpass,
                                 enable_spectral_gating,
+                                noise_profile.as_ref().map(|p| p.as_ref()),
                             ) {
                                 // Send result to main thread
                                 let _ = pitch_sender.send(pitch_result);
