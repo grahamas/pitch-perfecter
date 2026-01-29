@@ -294,11 +294,11 @@ impl eframe::App for PitchPerfecterApp {
                         ui.label("Filename:");
                         ui.text_edit_singleline(&mut self.save_path);
                     });
-                    
-                    if !self.save_path.ends_with(".wav") {
-                        ui.colored_label(egui::Color32::YELLOW, "⚠ Filename should end with .wav");
-                    }
                 });
+                
+                if !self.save_path.ends_with(".wav") {
+                    ui.colored_label(egui::Color32::YELLOW, "⚠ Filename should end with .wav");
+                }
             });
         });
     }
