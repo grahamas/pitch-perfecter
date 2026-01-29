@@ -294,6 +294,91 @@ impl eframe::App for PitchPerfecterApp {
             
             ui.add_space(10.0);
             
+            // Latency display
+            ui.group(|ui| {
+                ui.heading("Latency Metrics");
+                ui.add_space(5.0);
+                
+                if let Some(ref pitch) = self.current_pitch {
+                    // Input device latency
+                    if let Some(device_latency) = pitch.latency.input_device_latency {
+                        ui.horizontal(|ui| {
+                            ui.label("Input Device:");
+                            let latency_ms = device_latency.as_secs_f64() * 1000.0;
+                            ui.label(format!("{:.2} ms", latency_ms));
+                        });
+                    } else {
+                        ui.horizontal(|ui| {
+                            ui.label("Input Device:");
+                            ui.label("N/A");
+                        });
+                    }
+                    
+                    // Processing latency
+                    if let Some(processing) = pitch.latency.processing_duration() {
+                        ui.horizontal(|ui| {
+                            ui.label("Processing:");
+                            let latency_ms = processing.as_secs_f64() * 1000.0;
+                            let color = if latency_ms > 20.0 {
+                                egui::Color32::from_rgb(255, 165, 0) // Orange warning
+                            } else {
+                                egui::Color32::from_rgb(0, 200, 0) // Green
+                            };
+                            ui.colored_label(color, format!("{:.2} ms", latency_ms));
+                        });
+                    }
+                    
+                    // Total latency (callback to result)
+                    if let Some(total) = pitch.latency.total_latency() {
+                        ui.horizontal(|ui| {
+                            ui.label("Callback to Output:");
+                            let latency_ms = total.as_secs_f64() * 1000.0;
+                            let color = if latency_ms > 50.0 {
+                                egui::Color32::from_rgb(255, 0, 0) // Red warning
+                            } else if latency_ms > 30.0 {
+                                egui::Color32::from_rgb(255, 165, 0) // Orange
+                            } else {
+                                egui::Color32::from_rgb(0, 200, 0) // Green
+                            };
+                            ui.colored_label(color, format!("{:.2} ms", latency_ms));
+                        });
+                    }
+                    
+                    // End-to-end latency
+                    if let Some(e2e) = pitch.latency.end_to_end_latency() {
+                        ui.horizontal(|ui| {
+                            ui.label("End-to-End:");
+                            let latency_ms = e2e.as_secs_f64() * 1000.0;
+                            let color = if latency_ms > 70.0 {
+                                egui::Color32::from_rgb(255, 0, 0) // Red warning
+                            } else if latency_ms > 50.0 {
+                                egui::Color32::from_rgb(255, 165, 0) // Orange
+                            } else {
+                                egui::Color32::from_rgb(0, 200, 0) // Green
+                            };
+                            ui.colored_label(color, format!("{:.2} ms", latency_ms));
+                        });
+                    }
+                    
+                    ui.add_space(5.0);
+                    
+                    // Show warnings if latency is high
+                    if let Some(e2e) = pitch.latency.end_to_end_latency() {
+                        let latency_ms = e2e.as_secs_f64() * 1000.0;
+                        if latency_ms > 70.0 {
+                            ui.colored_label(
+                                egui::Color32::from_rgb(255, 0, 0),
+                                "⚠ High latency detected! Consider disabling audio cleaning."
+                            );
+                        }
+                    }
+                } else {
+                    ui.label("No latency data available");
+                }
+            });
+            
+            ui.add_space(10.0);
+            
             // File saving options
             ui.group(|ui| {
                 ui.heading("Save Recording");
