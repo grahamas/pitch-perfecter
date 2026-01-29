@@ -245,6 +245,45 @@ impl Drop for MicrophoneRecorder {
     }
 }
 
+/// Record background noise from the default input device for noise profile creation
+///
+/// This is a specialized function for recording a snippet of background noise/silence
+/// that can be used to initialize spectral noise gating. The recorded audio captures
+/// the ambient noise characteristics of the recording environment.
+///
+/// **Recommended duration:** 1-3 seconds of room silence (no speech or singing)
+///
+/// The audio is automatically converted to mono if the input is stereo or multi-channel.
+///
+/// # Arguments
+/// * `duration_secs` - Duration to record in seconds (recommended: 1.0 to 3.0)
+///
+/// # Returns
+/// * `Ok(MonoAudio)` - Successfully recorded noise sample
+/// * `Err(RecordingError)` - Error during recording
+///
+/// # Examples
+/// ```no_run
+/// use audio_utils::recording::record_noise_from_microphone;
+///
+/// // Record 2 seconds of background noise
+/// println!("Recording background noise... Please remain silent.");
+/// let noise = record_noise_from_microphone(2.0).expect("Failed to record noise");
+/// println!("Recorded {} samples at {} Hz", noise.samples.len(), noise.sample_rate);
+///
+/// // The recorded noise can then be used to create a noise profile
+/// // for spectral gating (see audio-cleaning crate documentation)
+/// ```
+///
+/// # Tips for Best Results
+/// - Record in the same environment where you'll be recording audio
+/// - Ensure no speech, singing, or loud sounds during noise recording
+/// - 2-3 seconds is usually sufficient to capture noise characteristics
+/// - The noise profile can be reused for multiple recordings in the same environment
+pub fn record_noise_from_microphone(duration_secs: f32) -> Result<MonoAudio, RecordingError> {
+    record_from_microphone(duration_secs)
+}
+
 /// Record audio from the default input device for a specified duration
 ///
 /// This is a convenience function for simple use cases where you want to record

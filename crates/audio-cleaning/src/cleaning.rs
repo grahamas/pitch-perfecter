@@ -195,6 +195,36 @@ pub fn estimate_noise_spectrum(audio: &audio::MonoAudio) -> Option<Spectrum> {
     _estimate_noise_spectrum(&audio.samples, audio.sample_rate as f32)
 }
 
+/// Creates a noise profile spectrum from recorded background noise
+///
+/// This function converts recorded noise samples into a frequency-domain noise profile
+/// that can be used with `SpectralGate` for noise reduction.
+///
+/// # Arguments
+/// * `noise_audio` - Audio recording of background noise (silence)
+///
+/// # Returns
+/// Frequency spectrum representing the noise characteristics
+///
+/// # Examples
+/// ```no_run
+/// use audio_utils::recording::record_noise_from_microphone;
+/// use audio_cleaning::{create_noise_profile, SpectralGate};
+///
+/// // Record background noise
+/// println!("Recording background noise... Please remain silent.");
+/// let noise = record_noise_from_microphone(2.0).expect("Failed to record noise");
+///
+/// // Create noise profile
+/// let noise_profile = create_noise_profile(&noise);
+///
+/// // Use it with spectral gating
+/// let gate = SpectralGate::with_defaults(noise_profile);
+/// ```
+pub fn create_noise_profile(noise_audio: &audio::MonoAudio) -> Spectrum {
+    Spectrum::from_waveform(&noise_audio.samples)
+}
+
 
 #[cfg(test)]
 mod tests {
@@ -239,6 +269,64 @@ mod tests {
         let audio = MonoAudio { samples: samples.clone(), sample_rate: 1000 };
         let spec = estimate_noise_spectrum(&audio);
         assert!(spec.is_some());
+    }
+
+    #[test]
+    fn test_create_noise_profile() {
+        // Create some noise samples
+        let noise_samples = vec![0.01, -0.01, 0.02, -0.02, 0.01];
+        let noise_audio = MonoAudio { 
+            samples: noise_samples.clone(), 
+            sample_rate: 8000 
+        };
+        
+        // Create noise profile
+        let profile = super::create_noise_profile(&noise_audio);
+        
+        // Verify spectrum was created with correct size
+        assert_eq!(profile.complex.len(), noise_samples.len());
+        
+        // Verify we can use it with SpectralGate
+        let gate = crate::SpectralGate::with_defaults(profile);
+        let test_signal = vec![0.1; 8];
+        let cleaned = gate.process(&test_signal);
+        assert_eq!(cleaned.len(), test_signal.len());
+    }
+
+    #[test]
+    fn test_create_noise_profile_empty() {
+        // Empty audio should still create a valid spectrum (though not useful)
+        let noise_audio = MonoAudio { 
+            samples: vec![], 
+            sample_rate: 8000 
+        };
+        
+        let profile = super::create_noise_profile(&noise_audio);
+        assert_eq!(profile.complex.len(), 0);
+    }
+
+    #[test]
+    fn test_create_noise_profile_consistent() {
+        // Same input should produce same profile
+        let noise_samples = vec![0.05; 16];
+        let audio1 = MonoAudio { 
+            samples: noise_samples.clone(), 
+            sample_rate: 44100 
+        };
+        let audio2 = MonoAudio { 
+            samples: noise_samples.clone(), 
+            sample_rate: 44100 
+        };
+        
+        let profile1 = super::create_noise_profile(&audio1);
+        let profile2 = super::create_noise_profile(&audio2);
+        
+        assert_eq!(profile1.complex.len(), profile2.complex.len());
+        
+        // Verify magnitudes are the same
+        for (c1, c2) in profile1.complex.iter().zip(profile2.complex.iter()) {
+            assert!((c1.norm() - c2.norm()).abs() < 1e-6);
+        }
     }
 
     #[test]

@@ -77,6 +77,36 @@ let filtered = bandpass_vocal_range(
 );
 ```
 
+### Recording Background Noise for Noise Profile
+
+The recommended way to create a noise profile is to record background noise from your microphone:
+
+```rust
+use audio_utils::recording::record_noise_from_microphone;
+use audio_cleaning::{create_noise_profile, SpectralGate};
+
+// Step 1: Record background noise (1-3 seconds of silence)
+println!("Recording background noise... Please remain silent.");
+let noise_audio = record_noise_from_microphone(2.0)?;
+
+// Step 2: Create noise profile
+let noise_profile = create_noise_profile(&noise_audio);
+
+// Step 3: Initialize spectral gate with the noise profile
+let gate = SpectralGate::with_defaults(noise_profile);
+
+// Step 4: Process audio through the gate
+let audio_samples = vec![/* your audio samples */];
+let cleaned = gate.process(&audio_samples);
+```
+
+**Important Notes:**
+- The noise profile is **static** - it doesn't update automatically during processing
+- Record noise in the same environment where you'll be recording audio
+- 1-3 seconds of pure silence (no speech/music) is usually sufficient
+- The same noise profile can be reused for multiple recordings in the same environment
+- Call `gate.update_noise_profile(new_profile)` if the environment changes
+
 ### Direct Spectral Gating (Advanced)
 
 For more control over spectral gating, use the dedicated `spectral_gating` module:
@@ -172,6 +202,40 @@ The crate supports two noise reduction approaches:
 - More sophisticated reduction
 - Better preserves signal quality
 - Recommended when noise sample available
+
+## How Spectral Noise Gating Works
+
+Spectral gating uses a **noise profile** to intelligently remove background noise while preserving the desired signal. Here's how it works:
+
+### Noise Profile Creation
+1. **Record or extract background noise** - Capture 1-3 seconds of silence/ambient noise
+2. **Transform to frequency domain** - Convert time-domain samples to frequency spectrum using FFT
+3. **Store as reference** - The resulting spectrum becomes the noise profile
+
+### Gating Process
+For each chunk of audio to be cleaned:
+1. **Transform to frequency domain** - Apply FFT to convert audio to frequency spectrum
+2. **Compare to noise profile** - For each frequency bin, compare magnitude to noise profile
+3. **Apply threshold** - Attenuate frequency bins that fall below `noise_threshold_db` relative to noise floor
+4. **Transform back** - Apply inverse FFT to convert cleaned spectrum back to time domain
+
+### Key Characteristics
+- **Static by default** - The noise profile does NOT update automatically during processing
+- **Reusable** - One noise profile can be used for multiple audio recordings in the same environment
+- **Updatable** - Call `update_noise_profile()` when the recording environment changes
+- **Frequency-selective** - Preserves signal energy above the noise floor while reducing noise
+
+### When to Update the Noise Profile
+- Recording environment changes (different room, different time of day)
+- Background noise characteristics change significantly (e.g., HVAC turns on/off)
+- Want to adapt to new noise conditions
+
+### Best Practices
+- Record noise in the **same environment** as your audio recordings
+- Ensure **complete silence** during noise recording (no speech, music, or movement)
+- **Reuse** the same profile for consistency across recordings in the same session
+- Record **longer samples** (2-3 seconds) for more accurate noise characterization
+- If using `estimate_noise_spectrum()`, ensure your audio has quiet sections for automatic detection
 
 ## API Reference
 
