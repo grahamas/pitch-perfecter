@@ -7,5 +7,7 @@
 pub mod audio;
 pub mod io;
 pub mod recording;
+pub mod latency;
 
 pub use audio::{Audio, MonoAudio, MonoAudioSource, IterableAudio};
+pub use latency::LatencyMetrics;

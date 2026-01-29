@@ -1,4 +1,4 @@
-use audio_utils::MonoAudio;
+use audio_utils::{MonoAudio, LatencyMetrics};
 use audio_cleaning::clean_audio_for_pitch;
 use pitch_detection_utils::{ThreadSafeYinDetector, MonoPitchDetector, hz_to_note_name};
 
@@ -9,6 +9,7 @@ pub struct PitchResult {
     pub frequency: f32,
     pub note_name: String,
     pub clarity: f32,
+    pub latency: LatencyMetrics,
 }
 
 pub struct PitchProcessor;
@@ -22,7 +23,11 @@ impl PitchProcessor {
         sample_rate: u32,
         enable_bandpass: bool,
         enable_spectral_gating: bool,
+        mut latency: LatencyMetrics,
     ) -> Option<PitchResult> {
+        // Mark the start of processing
+        latency.mark_processing_start();
+        
         // Only process if we have enough samples
         if samples.len() < WINDOW_SIZE {
             return None;
@@ -42,13 +47,20 @@ impl PitchProcessor {
         };
         
         // Detect pitch
-        if let Some(pitch) = detector.get_mono_pitch(processed_audio) {
+        let pitch_result = detector.get_mono_pitch(processed_audio);
+        
+        // Mark the end of processing (whether or not detection succeeded)
+        latency.mark_processing_end();
+        
+        // Return result with latency metrics
+        if let Some(pitch) = pitch_result {
             let note_name = hz_to_note_name(pitch.frequency);
             
             Some(PitchResult {
                 frequency: pitch.frequency,
                 note_name,
                 clarity: pitch.clarity,
+                latency,
             })
         } else {
             None
