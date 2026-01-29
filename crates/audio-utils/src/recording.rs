@@ -9,9 +9,37 @@ use cpal::traits::{DeviceTrait, HostTrait, StreamTrait};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// Delay in milliseconds to wait after pausing a stream before dropping it.
-/// This gives ALSA time to process the pause command and transition to a stable state.
+/// Delay in milliseconds to wait after successfully pausing a stream before dropping it.
+/// 
+/// ALSA processes pause commands asynchronously. This delay gives ALSA time to complete
+/// the state transition before the stream is dropped, preventing panics.
+/// 
+/// Note: cpal does not provide a way to query stream state, so we cannot verify that the
+/// pause has completed. This delay is based on typical ALSA behavior.
 const ALSA_PAUSE_DELAY_MS: u64 = 10;
+
+/// Attempt to pause a stream and wait for the pause to complete.
+/// 
+/// Since cpal doesn't expose stream state, we cannot actually verify that ALSA has
+/// completed processing the pause command. Instead, we:
+/// 1. Check that pause() succeeds (command was accepted)
+/// 2. Wait a conservative amount of time for ALSA to process it
+/// 
+/// Returns true if the pause command was successful and we waited appropriately.
+fn pause_and_await_completion(stream: &cpal::Stream) -> bool {
+    match stream.pause() {
+        Ok(()) => {
+            // Pause command was accepted by cpal, now wait for ALSA to process it
+            std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+            true
+        }
+        Err(e) => {
+            // Pause failed - log and indicate we didn't wait
+            eprintln!("Failed to pause stream: {}. Stream will be dropped immediately.", e);
+            false
+        }
+    }
+}
 
 /// Error type for audio recording operations
 #[derive(Debug)]
@@ -229,9 +257,10 @@ impl MicrophoneRecorder {
     /// Helper method to safely cleanup a stream by pausing it and waiting before dropping.
     /// This prevents ALSA panics by giving the backend time to process the pause command.
     fn cleanup_stream(stream: cpal::Stream) {
-        let _ = stream.pause();
-        // Give ALSA time to process the pause command
-        std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+        // Attempt to pause and wait for ALSA to process the command
+        pause_and_await_completion(&stream);
+        
+        // Now it's safe to drop the stream
         drop(stream);
     }
 }
@@ -313,9 +342,7 @@ pub fn record_from_microphone(duration_secs: f32) -> Result<MonoAudio, Recording
     std::thread::sleep(std::time::Duration::from_secs_f32(duration_secs));
     
     // Pause the stream before dropping to avoid ALSA panic
-    let _ = stream.pause();
-    // Give ALSA time to process the pause command
-    std::thread::sleep(Duration::from_millis(ALSA_PAUSE_DELAY_MS));
+    pause_and_await_completion(&stream);
     
     // Stop recording
     drop(stream);
